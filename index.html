@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="sv">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Liste Krimi — pulizia & etichette</title>
+<title>Matlistor — rensning & etiketter</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
-  :root{ --ink:#1c2230; --mut:#5a6473; --line:#d7dce4; --ok:#2e7d32; --okbg:#e8f5e9; --bad:#c62828; --badbg:#fdecea; --accent:#2f6bff; }
+  :root{ --ink:#1c2230; --mut:#5a6473; --line:#d7dce4; --accent:#2f6bff; }
   *{box-sizing:border-box}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);margin:0;background:#f4f6fa}
   .wrap{max-width:760px;margin:0 auto;padding:28px 18px 60px}
@@ -21,38 +21,38 @@
   #drop small{display:block;color:var(--mut);margin-top:6px}
   #files{list-style:none;padding:0;margin:14px 0 0}
   #files li{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:14px;margin-bottom:6px;display:flex;justify-content:space-between}
-  #files li span.rm{color:var(--bad);cursor:pointer}
+  #files li span.rm{color:#c62828;cursor:pointer}
   button.go{margin-top:16px;width:100%;background:var(--accent);color:#fff;border:0;border-radius:10px;padding:14px;font-size:16px;font-weight:600;cursor:pointer}
   button.go:disabled{background:#9db4e8;cursor:default}
   .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:18px}
   .rec{border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:10px;line-height:1.5}
-  .rec.ok{background:var(--okbg);border:1px solid #a5d6a7}
-  .rec.bad{background:var(--badbg);border:1px solid #ef9a9a}
+  .rec.ok{background:#e8f5e9;border:1px solid #a5d6a7}
+  .rec.bad{background:#fdecea;border:1px solid #ef9a9a}
   .rec b{display:block;margin-bottom:2px}
   .dl{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
   .dl a{flex:1;text-align:center;text-decoration:none;background:#132038;color:#fff;padding:12px;border-radius:10px;font-weight:600;font-size:15px;min-width:180px}
-  .err{color:var(--bad);font-size:14px;margin-top:10px;white-space:pre-wrap}
+  .err{color:#c62828;font-size:14px;margin-top:10px;white-space:pre-wrap}
   .foot{color:var(--mut);font-size:12px;margin-top:26px;line-height:1.6}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Liste Krimi</h1>
-  <p class="sub">Carica i PDF delle liste (Matbeställningslista). L'app toglie <b>Ej Fläsk, Ramadan, Ungdom, Nötter, Mandel</b> e genera <b>lista pulita</b> + <b>etichette</b>, con il riscontro dei totali.</p>
-  <div class="privacy">🔒 I PDF <b>non vengono caricati da nessuna parte</b>: tutto avviene qui nel browser, i dati non escono da questo computer.</div>
+  <h1>Matlistor</h1>
+  <p class="sub">Ladda upp PDF-listorna (Matbeställningslista). Appen tar bort <b>Ej Fläsk, Ramadan, Ungdom, Nötter, Mandel, Laktos</b> (de tre sista endast när de står ensamma) och skapar <b>rensad lista</b> + <b>etiketter</b>, med avstämning av totalerna.</p>
+  <div class="privacy">🔒 PDF-filerna laddas <b>inte upp någonstans</b>: allt sker här i webbläsaren, uppgifterna lämnar aldrig den här datorn.</div>
 
   <div id="drop">
-    <b>Trascina qui i PDF</b> oppure clicca per sceglierli<small>puoi caricarne più d'uno (es. Norra + Häktet)</small>
+    <b>Dra PDF-filerna hit</b> eller klicka för att välja<small>du kan ladda upp flera (t.ex. Norra + Häktet)</small>
     <input id="file" type="file" accept="application/pdf" multiple hidden>
   </div>
   <ul id="files"></ul>
-  <button class="go" id="go" disabled>Genera lista pulita + etichette</button>
+  <button class="go" id="go" disabled>Skapa rensad lista + etiketter</button>
 
   <div id="out"></div>
 
   <p class="foot">
-    Regole: si toglie “Ej Fläsk” solo la voce; se resta altro la riga resta. Nötter/Mandel tolti solo se unica voce (altrimenti riga segnalata, mai cancellata). Laktos resta. Allergeni e cibi brevi di Annat col “-” davanti; istruzioni (es. Diabetes, Hjärtproblem) restano testo.<br>
-    Sicurezza: le righe non vengono mai eliminate. Ogni struttura mostra <i>dichiarato = lette</i>: se non combacia, controlla a mano.
+    Regler: “Ej Fläsk”, “Ramadan” och “Ungdom” tas alltid bort. Nötter/Mandel/Laktos tas bort endast när de står ensamma; annars behålls raden (Nötter/Mandel markeras för kontroll). Allergener och korta Annat-livsmedel får “-” framför; instruktioner (t.ex. Diabetes, Hjärtproblem) förblir text.<br>
+    Säkerhet: rader raderas aldrig. Varje enhet visar <i>Angivet = Lästa</i>: stämmer det inte, kontrollera manuellt.
   </p>
 </div>
 
@@ -60,7 +60,7 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 const { jsPDF } = window.jspdf;
 
-/* ---------- estrazione (equivalente pdf.js del parsing testato) ---------- */
+/* ---------- extrahering (samma logik som testats) ---------- */
 const FURNITURE = /^(Matbeställningslista|Utskriftsdatum|Verksamhetsställe|Inskrivningsnr|Avd\/Rum|Totalt|Rapporten|KV 0154|\d{4}-\d{2}-\d{2}|\d\s*\(\s*\d\s*\)|Normalkost|Specialkost$)/;
 
 async function parsePdf(buf){
@@ -72,23 +72,18 @@ async function parsePdf(buf){
     const tc = await page.getTextContent();
     const its = tc.items.filter(i=>i.str!=null).map(i=>({str:i.str, x:i.transform[4], y:i.transform[5]}));
     its.sort((a,b)=> (b.y-a.y) || (a.x-b.x));
-    // raggruppa in righe per y
-    const lines=[]; let cy=null, buf2=[];
+    const lines=[]; let cy=null, bb=[];
     for(const it of its){
-      if(cy===null || Math.abs(it.y-cy)<=3){ buf2.push(it); if(cy===null) cy=it.y; }
-      else { lines.push(buf2); buf2=[it]; cy=it.y; }
+      if(cy===null || Math.abs(it.y-cy)<=3){ bb.push(it); if(cy===null) cy=it.y; }
+      else { lines.push(bb); bb=[it]; cy=it.y; }
     }
-    if(buf2.length) lines.push(buf2);
-
+    if(bb.length) lines.push(bb);
     for(const ln of lines){
       const sorted = ln.slice().sort((a,b)=>a.x-b.x);
       const text = sorted.map(o=>o.str).join(" ").replace(/\s+/g," ").trim();
       if(!text) continue;
       const x0 = sorted[0].x;
-      // colonna Specialkost dalla riga d'intestazione persone
-      if(/Inskrivningsnr/.test(text)){
-        const sp = sorted.find(o=>/Specialkost/.test(o.str)); if(sp) specX = sp.x;
-      }
+      if(/Inskrivningsnr/.test(text)){ const sp = sorted.find(o=>/Specialkost/.test(o.str)); if(sp) specX = sp.x; }
       const fm = text.match(/Verksamhetsställe:\s*(.+)/); if(fm && !facility) facility = fm[1].trim();
       const tm = text.match(/^Totalt\b.*?(\d+)\s+(\d+)\s*$/); if(tm) declared = parseInt(tm[2],10);
       if(!seenPerson && !/^\d{4}\/\d+/.test(text)){
@@ -109,12 +104,15 @@ async function parsePdf(buf){
   return {facility, declared, summary, people};
 }
 
-/* ---------- pulizia (identica agli script Python testati) ---------- */
+/* ---------- rensning ---------- */
 const WORD = /[0-9A-Za-zÀ-ÿåäöÅÄÖ]+/g;
-function residualAfterFree(s){
-  let t = s.replace(/\bMIS:/gi,"").replace(/\bAnnat:/gi,"").replace(/\b(Nötter|Mandel)\b/gi,"");
-  t = t.replace(/[^0-9A-Za-zÀ-ÿåäöÅÄÖ]+/g," ").trim();
-  return t;
+// tas bort endast när de står ensamma:
+const SOLE_RX = /\b(Nötter|Mandel|Laktos)\b/i;
+// om blandade med annat riktigt innehåll: markera (allvarliga allergener)
+const FLAG_RX = /\b(Nötter|Mandel)\b/i;
+function residualAfterSole(s){
+  let t = s.replace(/\bMIS:/gi,"").replace(/\bAnnat:/gi,"").replace(/\b(Nötter|Mandel|Laktos)\b/gi,"");
+  return t.replace(/[^0-9A-Za-zÀ-ÿåäöÅÄÖ]+/g," ").trim();
 }
 function cleanup(s){
   s = s.replace(/\s*,(\s*,)+/g,",").replace(/\s+,/g,",").replace(/[ \t]{2,}/g," ");
@@ -122,12 +120,13 @@ function cleanup(s){
 }
 function cleanSpec(spec){
   const hasNoise = /Ej\s+Fläsk/i.test(spec) || /\bRamadan\b/i.test(spec) || /\bUngdom\b/i.test(spec);
-  const hasFree  = /\b(Nötter|Mandel)\b/i.test(spec);
-  if(!hasNoise && !hasFree) return {text:spec, flag:""};
+  const hasSole  = SOLE_RX.test(spec);
+  if(!hasNoise && !hasSole) return {text:spec, flag:""};
   let s = spec.replace(/Ej\s+Fläsk(\s*\(REL\))?/gi,"").replace(/\bRamadan\b/gi,"").replace(/\bUngdom\b/gi,"");
-  if(hasFree){
-    if(residualAfterFree(s)==="") return {text:"", flag:""};
-    return {text:spec, flag:"review"};
+  if(hasSole){
+    if(residualAfterSole(s)==="") return {text:"", flag:""};   // bara Nötter/Mandel/Laktos -> tom
+    if(FLAG_RX.test(spec)) return {text:spec, flag:"review"};   // Nötter/Mandel blandat -> markera, orört
+    // enbart Laktos blandat med annat -> behåll Laktos, ta bort endast bruset
   }
   s = cleanup(s);
   const ow = new Set((spec.toLowerCase().match(WORD)||[]));
@@ -136,7 +135,7 @@ function cleanSpec(spec){
   return {text:s, flag:""};
 }
 
-/* ---------- tipo per etichetta ---------- */
+/* ---------- etikett-typ ---------- */
 const NOTFOOD = new Set(["diabetes","diab","ungdom"]);
 const cap = x => x ? x.charAt(0).toUpperCase()+x.slice(1) : x;
 function shortType(spec){
@@ -161,7 +160,7 @@ function shortType(spec){
 const wardOf = avd => { const m=(avd||"").match(/^H?(\d+)\//); return m?m[1]:""; };
 const shortNum = insk => { const m=(insk||"").match(/^\d{2}(\d{2})\/(\d+)$/); return m? m[1]+"/"+m[2] : insk; };
 
-/* ---------- PDF: lista pulita ---------- */
+/* ---------- PDF: rensad lista ---------- */
 function buildLists(sections){
   const doc = new jsPDF({unit:"mm",format:"a4"});
   sections.forEach((sec,i)=>{
@@ -169,14 +168,14 @@ function buildLists(sections){
     doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.setTextColor(20);
     doc.text("Matbeställningslista",105,15,{align:"center"});
     doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(90);
-    doc.text(sec.facility+"  ·  pulita (rimossi: Ej Fläsk, Ramadan, Ungdom, Nötter, Mandel)",105,20,{align:"center"});
+    doc.text(sec.facility+"  ·  rensad (borttaget: Ej Fläsk, Ramadan, Ungdom, Nötter, Mandel, Laktos ensam)",105,20,{align:"center"});
     const ok = sec.declared===sec.extracted;
     doc.setFillColor(ok?232:253, ok?245:236, ok?233:234);
     doc.setDrawColor(ok?67:198, ok?160:40, ok?71:40); doc.setLineWidth(0.4);
     doc.rect(15,24,180,14,"FD"); doc.setTextColor(20); doc.setFont("helvetica","bold");
-    doc.setFontSize(10); doc.text(ok?"RISCONTRO OK":"DISALLINEAMENTO — CONTROLLARE A MANO",18,29.5);
+    doc.setFontSize(10); doc.text(ok?"AVSTÄMNING OK":"AVVIKELSE — KONTROLLERA MANUELLT",18,29.5);
     doc.setFontSize(9);
-    doc.text(`Totale dichiarato: ${sec.declared}    Righe lette: ${sec.extracted}    Svuotate: ${sec.emptied}    Con richiesta: ${sec.remaining}    Da controllare: ${sec.review}`,18,34.5);
+    doc.text(`Angivet totalt: ${sec.declared}    Lästa rader: ${sec.extracted}    Tömda: ${sec.emptied}    Med begäran: ${sec.remaining}    Att kontrollera: ${sec.review}`,18,34.5);
     let y=42;
     if(sec.summary.length){
       doc.autoTable({startY:y, head:[["Avd/Rum","Normalkost","Specialkost"]], body:sec.summary,
@@ -185,7 +184,7 @@ function buildLists(sections){
       y = doc.lastAutoTable.finalY + 4;
     }
     doc.autoTable({startY:y, head:[["Inskrivningsnr","Avdelning","Specialkost"]],
-      body: sec.people.map(p=>[p.insk,p.avd, p.flag==="review" ? (p.text+"  ◀ CONTROLLARE") : p.text]),
+      body: sec.people.map(p=>[p.insk,p.avd, p.flag==="review" ? (p.text+"  ◀ KONTROLLERA") : p.text]),
       theme:"grid", styles:{fontSize:8.5, cellPadding:1}, headStyles:{fillColor:[238,238,238],textColor:20},
       margin:{left:15,right:15}, columnStyles:{0:{cellWidth:28},1:{cellWidth:30},2:{cellWidth:122}},
       didParseCell:d=>{ if(d.section==="body"){ const pp=sec.people[d.row.index]; if(pp&&pp.flag==="review") d.cell.styles.fillColor=[255,243,224]; } }
@@ -194,12 +193,11 @@ function buildLists(sections){
   return doc.output("blob");
 }
 
-/* ---------- PDF: etichette ---------- */
+/* ---------- PDF: etiketter ---------- */
 function buildLabels(items){
   const doc = new jsPDF({unit:"mm",format:"a4"});
   const ml=8, mt=8, cols=3, labH=30, colW=(210-16)/3, rows=Math.floor((297-16)/labH), perPage=cols*rows;
-  const stripe=14, WARD=20, NUM=18;
-  const PT=0.3528;
+  const stripe=14, WARD=20, NUM=18, PT=0.3528;
   items.forEach((it,idx)=>{
     const pos=idx%perPage;
     if(idx && pos===0) doc.addPage();
@@ -211,14 +209,11 @@ function buildLabels(items){
     doc.setFontSize(WARD); doc.text(it.ward||"", x+stripe/2, y+labH/2, {align:"center", baseline:"middle"});
     const cx = x+stripe+(colW-stripe)/2;
     doc.setFontSize(NUM); doc.text(it.num||"", cx, y+labH-4, {align:"center"});
-    // tipo: adatta dimensione e vai a capo
-    const maxW = colW-stripe-4;
-    let size=10, lines;
+    const maxW = colW-stripe-4; let size=10, lines;
     while(size>=6){ doc.setFontSize(size); lines=doc.splitTextToSize(it.type||"", maxW);
       if(lines.length*(size*PT+0.6) <= labH-9) break; size-=0.5; }
     if(it.flag==="review") doc.setTextColor(200,40,40); else doc.setTextColor(0);
-    doc.setFontSize(size);
-    let ty=y+4+size*PT;
+    doc.setFontSize(size); let ty=y+4+size*PT;
     for(const ln of lines){ doc.text(ln, cx, ty, {align:"center"}); ty += size*PT+0.6; }
   });
   return doc.output("blob");
@@ -231,7 +226,7 @@ let files=[];
 function refresh(){
   fileList.innerHTML="";
   files.forEach((f,i)=>{ const li=document.createElement("li");
-    li.innerHTML=`<span>📄 ${f.name}</span><span class="rm" data-i="${i}">rimuovi</span>`; fileList.appendChild(li); });
+    li.innerHTML=`<span>📄 ${f.name}</span><span class="rm" data-i="${i}">ta bort</span>`; fileList.appendChild(li); });
   go.disabled = files.length===0;
 }
 fileList.addEventListener("click",e=>{ if(e.target.classList.contains("rm")){ files.splice(+e.target.dataset.i,1); refresh(); }});
@@ -240,11 +235,11 @@ fileInput.addEventListener("change",()=>{ addFiles(fileInput.files); fileInput.v
 ["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
 ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
 drop.addEventListener("drop",e=>addFiles(e.dataTransfer.files));
-function addFiles(list){ for(const f of list){ if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)) files.push(f); } 
+function addFiles(list){ for(const f of list){ if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)) files.push(f); }
   files.sort((a,b)=>a.name.localeCompare(b.name)); refresh(); }
 
 go.addEventListener("click", async ()=>{
-  out.innerHTML=""; go.disabled=true; go.textContent="Elaboro…";
+  out.innerHTML=""; go.disabled=true; go.textContent="Bearbetar…";
   try{
     const sections=[], labelItems=[];
     for(const f of files){
@@ -259,24 +254,22 @@ go.addEventListener("click", async ()=>{
       cleaned.filter(p=>p.text!=="").forEach(p=>labelItems.push(
         {ward:wardOf(p.avd), type:shortType(p.text), num:shortNum(p.insk), flag:p.flag}));
     }
-    const listBlob = buildLists(sections);
-    const labBlob  = buildLabels(labelItems);
-    const listURL=URL.createObjectURL(listBlob), labURL=URL.createObjectURL(labBlob);
-
+    const listURL=URL.createObjectURL(buildLists(sections));
+    const labURL =URL.createObjectURL(buildLabels(labelItems));
     const card=document.createElement("div"); card.className="card";
     sections.forEach(s=>{ const ok=s.declared===s.extracted; const d=document.createElement("div");
       d.className="rec "+(ok?"ok":"bad");
-      d.innerHTML=`<b>${s.facility} — ${ok?"RISCONTRO OK ✓":"⚠ DISALLINEAMENTO, controlla a mano"}</b>
-        Dichiarato ${s.declared==null?"?":s.declared} · Lette ${s.extracted} · Svuotate ${s.emptied} · Con richiesta ${s.remaining} · Da controllare ${s.review}`;
+      d.innerHTML=`<b>${s.facility} — ${ok?"AVSTÄMNING OK ✓":"⚠ AVVIKELSE, kontrollera manuellt"}</b>
+        Angivet ${s.declared==null?"?":s.declared} · Lästa ${s.extracted} · Tömda ${s.emptied} · Med begäran ${s.remaining} · Att kontrollera ${s.review}`;
       card.appendChild(d); });
     const dl=document.createElement("div"); dl.className="dl";
-    dl.innerHTML=`<a href="${listURL}" download="liste_pulite.pdf">⬇︎ Lista pulita</a>
-                  <a href="${labURL}" download="etichette.pdf">⬇︎ Etichette (${labelItems.length})</a>`;
+    dl.innerHTML=`<a href="${listURL}" download="rensad_lista.pdf">⬇︎ Rensad lista</a>
+                  <a href="${labURL}" download="etiketter.pdf">⬇︎ Etiketter (${labelItems.length})</a>`;
     card.appendChild(dl); out.appendChild(card);
   }catch(err){
-    const e=document.createElement("div"); e.className="err"; e.textContent="Errore: "+(err&&err.message?err.message:err); out.appendChild(e);
+    const e=document.createElement("div"); e.className="err"; e.textContent="Fel: "+(err&&err.message?err.message:err); out.appendChild(e);
   }
-  go.disabled=false; go.textContent="Genera lista pulita + etichette";
+  go.disabled=false; go.textContent="Skapa rensad lista + etiketter";
 });
 </script>
 </body>
