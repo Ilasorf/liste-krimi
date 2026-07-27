@@ -215,12 +215,12 @@ function buildLabels(items, dx, dy){
     doc.setTextColor(0); doc.setFont("helvetica","bold");
     doc.setFontSize(WARD); doc.text(it.ward||"", x+stripe/2, y+labH/2, {align:"center", baseline:"middle"});
     const cx = x+stripe+(labW-stripe)/2;
-    doc.setFontSize(NUM); doc.text(it.num||"", cx, y+labH-PAD, {align:"center"});
+    doc.setFontSize(NUM); doc.text(it.num||"", cx, y+labH-7, {align:"center"});
     const maxW = labW-stripe-2*PAD; let size=11, lines;
     while(size>=6){ doc.setFontSize(size); lines=doc.splitTextToSize(it.type||"", maxW);
-      if(lines.length*(size*PT+0.7) <= labH-11) break; size-=0.5; }
+      if(lines.length*(size*PT+0.7) <= labH-15) break; size-=0.5; }
     if(it.flag==="review") doc.setTextColor(200,40,40); else doc.setTextColor(0);
-    doc.setFontSize(size); let ty=y+PAD+size*PT;
+    doc.setFontSize(size); let ty=y+6+size*PT;
     for(const ln of lines){ doc.text(ln, cx, ty, {align:"center"}); ty += size*PT+0.7; }
   });
   return doc.output("blob");
