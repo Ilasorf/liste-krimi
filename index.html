@@ -32,6 +32,9 @@
   .dl{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
   .dl a{flex:1;text-align:center;text-decoration:none;background:#132038;color:#fff;padding:12px;border-radius:10px;font-weight:600;font-size:15px;min-width:180px}
   .err{color:#c62828;font-size:14px;margin-top:10px;white-space:pre-wrap}
+  .adj{margin-top:14px;font-size:13px;color:var(--mut)}
+  .adj input{width:64px;padding:6px;border:1px solid var(--line);border-radius:6px;margin:0 3px}
+  .adj small{display:block;margin-top:4px;font-size:12px}
   .foot{color:var(--mut);font-size:12px;margin-top:26px;line-height:1.6}
 </style>
 </head>
@@ -46,6 +49,8 @@
     <input id="file" type="file" accept="application/pdf" multiple hidden>
   </div>
   <ul id="files"></ul>
+  <div class="adj">Justering skrivare (mm) — X <input id="dx" type="number" value="0" step="0.5"> Y <input id="dy" type="number" value="0" step="0.5">
+    <small>Etiketter 70×37 mm, 24 per ark (3×8). Skriv ut i <b>100 % / verklig storlek</b> (inte “anpassa till sidan”). Om texten hamnar snett, justera X/Y med några mm.</small></div>
   <button class="go" id="go" disabled>Skapa rensad lista + etiketter</button>
 
   <div id="out"></div>
@@ -193,28 +198,30 @@ function buildLists(sections){
   return doc.output("blob");
 }
 
-/* ---------- PDF: etiketter ---------- */
-function buildLabels(items){
+/* ---------- PDF: etiketter (självhäftande ark 70x37 mm, 3x8 = 24/sida) ---------- */
+function buildLabels(items, dx, dy){
   const doc = new jsPDF({unit:"mm",format:"a4"});
-  const ml=8, mt=8, cols=3, labH=30, colW=(210-16)/3, rows=Math.floor((297-16)/labH), perPage=cols*rows;
-  const stripe=14, WARD=20, NUM=18, PT=0.3528;
+  const cols=3, rows=8, labW=70, labH=37, perPage=cols*rows;
+  const ml=0, mt=0.5;                 // 70*3=210 (hela bredden), 37*8=296 (~0.5 topp)
+  const stripe=16, WARD=22, NUM=20, PT=0.3528, PAD=3.5;
+  dx = dx||0; dy = dy||0;
   items.forEach((it,idx)=>{
     const pos=idx%perPage;
     if(idx && pos===0) doc.addPage();
     const col=pos%cols, row=Math.floor(pos/cols);
-    const x=ml+col*colW, y=mt+row*labH;
-    doc.setDrawColor(140); doc.setLineWidth(0.3); doc.rect(x,y,colW,labH);
-    doc.setDrawColor(205); doc.line(x+stripe,y+2,x+stripe,y+labH-2);
+    const x=ml+col*labW+dx, y=mt+row*labH+dy;
+    // inga skärlinjer (etiketterna är förstansade); bara en tunn avdelare inne i etiketten
+    doc.setDrawColor(210); doc.setLineWidth(0.2); doc.line(x+stripe, y+4, x+stripe, y+labH-4);
     doc.setTextColor(0); doc.setFont("helvetica","bold");
     doc.setFontSize(WARD); doc.text(it.ward||"", x+stripe/2, y+labH/2, {align:"center", baseline:"middle"});
-    const cx = x+stripe+(colW-stripe)/2;
-    doc.setFontSize(NUM); doc.text(it.num||"", cx, y+labH-4, {align:"center"});
-    const maxW = colW-stripe-4; let size=10, lines;
+    const cx = x+stripe+(labW-stripe)/2;
+    doc.setFontSize(NUM); doc.text(it.num||"", cx, y+labH-PAD, {align:"center"});
+    const maxW = labW-stripe-2*PAD; let size=11, lines;
     while(size>=6){ doc.setFontSize(size); lines=doc.splitTextToSize(it.type||"", maxW);
-      if(lines.length*(size*PT+0.6) <= labH-9) break; size-=0.5; }
+      if(lines.length*(size*PT+0.7) <= labH-11) break; size-=0.5; }
     if(it.flag==="review") doc.setTextColor(200,40,40); else doc.setTextColor(0);
-    doc.setFontSize(size); let ty=y+4+size*PT;
-    for(const ln of lines){ doc.text(ln, cx, ty, {align:"center"}); ty += size*PT+0.6; }
+    doc.setFontSize(size); let ty=y+PAD+size*PT;
+    for(const ln of lines){ doc.text(ln, cx, ty, {align:"center"}); ty += size*PT+0.7; }
   });
   return doc.output("blob");
 }
@@ -255,7 +262,9 @@ go.addEventListener("click", async ()=>{
         {ward:wardOf(p.avd), type:shortType(p.text), num:shortNum(p.insk), flag:p.flag}));
     }
     const listURL=URL.createObjectURL(buildLists(sections));
-    const labURL =URL.createObjectURL(buildLabels(labelItems));
+    const dx=parseFloat(document.getElementById("dx").value)||0;
+    const dy=parseFloat(document.getElementById("dy").value)||0;
+    const labURL =URL.createObjectURL(buildLabels(labelItems, dx, dy));
     const card=document.createElement("div"); card.className="card";
     sections.forEach(s=>{ const ok=s.declared===s.extracted; const d=document.createElement("div");
       d.className="rec "+(ok?"ok":"bad");
