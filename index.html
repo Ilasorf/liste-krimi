@@ -210,24 +210,30 @@ function buildLabels(items, dx, dy){
   const doc = new jsPDF({unit:"mm",format:"a4"});
   const cols=3, rows=8, labW=70, labH=37, perPage=cols*rows;
   const ml=0, mt=0.5;                 // 70*3=210 (hela bredden), 37*8=296 (~0.5 topp)
-  const stripe=16, WARD=22, NUM=20, PT=0.3528, PAD=3.5;
+  const WARD=22, NUM=20, PT=0.3528, TOPPAD=10, BOTPAD=10;
   dx = dx||0; dy = dy||0;
+  function grid(){
+    doc.setDrawColor(120); doc.setLineWidth(0.3);
+    const y0=mt+dy, y1=mt+rows*labH+dy, x0=ml+dx, x1=ml+cols*labW+dx;
+    for(let c=1;c<cols;c++){ const x=ml+c*labW+dx; doc.line(x,y0,x,y1); }   // endast inre vertikala
+    for(let r=1;r<rows;r++){ const y=mt+r*labH+dy; doc.line(x0,y,x1,y); }   // endast inre horisontella
+  }
   items.forEach((it,idx)=>{
     const pos=idx%perPage;
-    if(idx && pos===0) doc.addPage();
+    if(pos===0){ if(idx) doc.addPage(); grid(); }
     const col=pos%cols, row=Math.floor(pos/cols);
     const x=ml+col*labW+dx, y=mt+row*labH+dy;
-    // inga skärlinjer (etiketterna är förstansade); bara en tunn avdelare inne i etiketten
-    doc.setDrawColor(210); doc.setLineWidth(0.2); doc.line(x+stripe, y+4, x+stripe, y+labH-4);
+    // avdelning till vänster, centrerad i höjd
     doc.setTextColor(0); doc.setFont("helvetica","bold");
-    doc.setFontSize(WARD); doc.text(it.ward||"", x+stripe/2, y+labH/2, {align:"center", baseline:"middle"});
-    const cx = x+stripe+(labW-stripe)/2;
-    doc.setFontSize(NUM); doc.text(it.num||"", cx, y+labH-8.5, {align:"center"});
-    const maxW = labW-stripe-2*PAD; let size=11, lines;
+    doc.setFontSize(WARD); doc.text(it.ward||"", x+12, y+labH/2, {align:"center", baseline:"middle"});
+    // text + nummer centrerade i ytan till höger, väl inne från linjerna
+    const cx = x + 45;
+    doc.setFontSize(NUM); doc.text(it.num||"", cx, y+labH-BOTPAD, {align:"center"});
+    const maxW = 42; let size=11, lines;
     while(size>=6){ doc.setFontSize(size); lines=doc.splitTextToSize(it.type||"", maxW);
-      if(lines.length*(size*PT+0.7) <= labH-18) break; size-=0.5; }
+      if(lines.length*(size*PT+0.7) <= labH-26) break; size-=0.5; }
     if(it.flag==="review") doc.setTextColor(200,40,40); else doc.setTextColor(0);
-    doc.setFontSize(size); let ty=y+8.5+size*PT;
+    doc.setFontSize(size); let ty=y+TOPPAD+size*PT;
     for(const ln of lines){ doc.text(ln, cx, ty, {align:"center"}); ty += size*PT+0.7; }
   });
   return doc.output("blob");
