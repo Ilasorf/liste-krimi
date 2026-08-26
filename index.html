@@ -194,12 +194,12 @@ function comps(spec){
 }
 const normK  = k => k.replace(/\.$/,"").replace(/frukter\b/,"frukt");
 const coreK  = k => k.replace(/^-+/,"").trim().toLowerCase();
-const isCleanK = k => { const c=k.replace(/^-+/,"").trim(); return (c.indexOf(" ")<0)||CLEAN_MULTI.has(c.toLowerCase()); };
+const isCleanK = k => { const c=k.replace(/^-+/,"").trim(); return (c.indexOf(" ")<0) || /^Ej \S+$/i.test(c) || CLEAN_MULTI.has(c.toLowerCase()); };
 function summaCounts(people){
   const c={}; let sar=0;
   for(const p of people){ if(!p.text||!p.text.trim()) continue;
     for(const comp of comps(p.text)){ const k=normK(comp);
-      if(EXCLUDE.has(coreK(k))) continue;
+      const ck=coreK(k); if(EXCLUDE.has(ck) || (ck.startsWith("ej ") && EXCLUDE.has(ck.slice(3)))) continue;
       if(!isCleanK(k)){ sar++; continue; }
       c[k]=(c[k]||0)+1;
     }
