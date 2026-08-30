@@ -196,22 +196,25 @@ const normK  = k => k.replace(/\.$/,"").replace(/frukter\b/,"frukt");
 const coreK  = k => k.replace(/^-+/,"").trim().toLowerCase();
 const isCleanK = k => { const c=k.replace(/^-+/,"").trim(); return (c.indexOf(" ")<0) || /^Ej \S+$/i.test(c) || CLEAN_MULTI.has(c.toLowerCase()); };
 function summaCounts(people){
-  const c={}; let sar=0;
+  const c={}; const extras=[];
   for(const p of people){ if(!p.text||!p.text.trim()) continue;
+    const sar=[];
     for(const comp of comps(p.text)){ const k=normK(comp);
       const ck=coreK(k); if(EXCLUDE.has(ck) || (ck.startsWith("ej ") && EXCLUDE.has(ck.slice(3)))) continue;
-      if(!isCleanK(k)){ sar++; continue; }
+      if(!isCleanK(k)){ sar.push(comp); continue; }
       c[k]=(c[k]||0)+1;
     }
+    if(sar.length) extras.push({ward:wardOf(p.avd), num:shortNum(p.insk), text:sar.join(", ")});
   }
   let rows=Object.entries(c).sort((a,b)=> b[1]-a[1] || a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
   rows=rows.map(([k,v])=> [k==="Specialkost utan intyg"?"SK u. intyg":k, v]);
-  return {rows, sarskilt:sar};
+  return {rows, extras};
 }
 
 /* ---------- PDF: rensad lista ---------- */
 function buildLists(sections){
   const doc = new jsPDF({unit:"mm",format:"a4"});
+  const gcnt = summaCounts(sections.flatMap(s=>s.people));   // Summa per kost combinerad
   sections.forEach((sec,i)=>{
     if(i) doc.addPage();
     doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.setTextColor(20);
@@ -229,33 +232,55 @@ function buildLists(sections){
       doc.text(sec.datum, 200, 16, {align:"right"}); doc.setTextColor(0); }
     let y=42;
     if(sec.summary.length){
-      // Avd/Rum-tabell (vänster) med Summa-kolumn
+      // Avd/Rum-tabell (vänster) med Summa-kolumn — per enhet
       doc.autoTable({startY:y, head:[["Avd/Rum","Norm","Spec","Summa"]],
         body: sec.summary.map(r=>[r[0], r[1], r[2], String((parseInt(r[1])||0)+(parseInt(r[2])||0))]),
         theme:"grid", styles:{fontSize:9, cellPadding:1.2}, headStyles:{fillColor:[238,238,238],textColor:20,fontSize:9},
         margin:{left:10}, tableWidth:"wrap",
         columnStyles:{0:{cellWidth:30},1:{cellWidth:16,halign:"right"},2:{cellWidth:16,halign:"right"},3:{cellWidth:20,halign:"right"}} });
       const tblBottom = doc.lastAutoTable.finalY;
-      // Summa per kost (höger, 2 kolumner)
-      const cnt = summaCounts(sec.people);
-      const xR = 100;
-      doc.setTextColor(0); doc.setFont("helvetica","bold"); doc.setFontSize(11);
-      doc.text("Summa per kost", xR, y+3.5);
-      doc.setDrawColor(180); doc.setLineWidth(0.3); doc.line(xR, y+5, 200, y+5);
-      const half = Math.ceil(cnt.rows.length/2), cx=[xR, xR+52];
-      let botY=y+5;
-      for(let ci=0; ci<2; ci++){
-        let yy=y+10;
-        for(const [label,v] of cnt.rows.slice(ci*half,(ci+1)*half)){
-          doc.setFont("helvetica","bold"); doc.setFontSize(10.5); doc.text(String(v), cx[ci], yy);
-          doc.setFont("helvetica","normal"); doc.text(label, cx[ci]+7, yy);
-          yy+=5.6;
+      let botY=y;
+      if(i===0){
+        // Summa per kost KOMBINERAD (alla uppladdade listor) — endast första sidan
+        const xR = 100;
+        doc.setTextColor(0); doc.setFont("helvetica","bold"); doc.setFontSize(11);
+        doc.text("Summa per kost", xR, y+3.5);
+        doc.setDrawColor(180); doc.setLineWidth(0.3); doc.line(xR, y+5, 200, y+5);
+        const half = Math.ceil(gcnt.rows.length/2), cx=[xR, xR+52];
+        botY=y+5;
+        for(let ci=0; ci<2; ci++){
+          let yy=y+10;
+          for(const [label,v] of gcnt.rows.slice(ci*half,(ci+1)*half)){
+            doc.setFont("helvetica","bold"); doc.setFontSize(10.5); doc.text(String(v), cx[ci], yy);
+            doc.setFont("helvetica","normal"); doc.text(label, cx[ci]+7, yy);
+            yy+=5.6;
+          }
+          botY=Math.max(botY,yy);
         }
-        botY=Math.max(botY,yy);
       }
-      if(cnt.sarskilt){ doc.setFont("helvetica","italic"); doc.setFontSize(9); doc.setTextColor(90);
-        doc.text(`+ ${cnt.sarskilt} särskilda (se listan)`, xR, botY+0.5); doc.setTextColor(0); botY+=5; }
-      y = Math.max(tblBottom, botY) + 5;
+      y = Math.max(tblBottom, botY) + 4;
+      if(i===0 && gcnt.extras.length){
+        doc.setTextColor(0);
+        doc.setFont("helvetica","bold"); doc.setFontSize(10);
+        doc.text("Särskilt", 10, y+1);
+        doc.setDrawColor(180); doc.setLineWidth(0.3); doc.line(10, y+2.5, 200, y+2.5);
+        y+=6;
+        doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
+        const colW=93, colX=[10,107], per=Math.ceil(gcnt.extras.length/2);
+        const fit=(pre,desc,maxw)=>{ if(doc.getTextWidth(pre+desc)<=maxw) return pre+desc;
+          let d=desc; while(d.length>1 && doc.getTextWidth(pre+d+"\u2026")>maxw) d=d.slice(0,-1);
+          return pre+d.trim()+"\u2026"; };
+        let startY=y, maxBot=y;
+        for(let ci=0; ci<2; ci++){
+          let yy=startY;
+          for(const e of gcnt.extras.slice(ci*per,(ci+1)*per)){
+            doc.text(fit(`${e.ward} \u00b7 ${e.num} \u00b7 `, e.text, colW), colX[ci], yy);
+            yy+=4.6;
+          }
+          maxBot=Math.max(maxBot,yy);
+        }
+        y=maxBot+2.5;
+      }
     }
     doc.autoTable({startY:y, head:[["Inskrivningsnr","Avdelning","Specialkost"]],
       body: sec.people.map(p=>[p.insk,p.avd, p.flag==="review" ? (p.text+"  ◀ KONTROLLERA") : p.text]),
