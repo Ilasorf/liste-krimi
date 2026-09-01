@@ -59,6 +59,7 @@
     Regler: “Ej Fläsk”, “Ramadan” och “Ungdom” tas alltid bort. Nötter/Mandel/Laktos/Ej Blodmat tas bort endast när de står ensamma; annars behålls raden (Nötter/Mandel markeras för kontroll). Allergener och korta Annat-livsmedel får “-” framför; instruktioner (t.ex. Diabetes, Hjärtproblem) förblir text.<br>
     Säkerhet: rader raderas aldrig. Varje enhet visar <i>Angivet = Lästa</i>: stämmer det inte, kontrollera manuellt.
   </p>
+  <p style="text-align:center;color:#9aa3b0;font-size:12px;margin-top:20px">Powered by <b>Simone</b> \u00b7 Västervik Norra Köket</p>
 </div>
 
 <script>
@@ -175,7 +176,7 @@ const shortNum = insk => { const m=(insk||"").match(/^\d{2}(\d{2})\/(\d+)$/); re
 
 /* ---------- Summa per kost (conteggio per tipo) ---------- */
 const CLEAN_MULTI = new Set(["vegetarisk","specialkost utan intyg","ej skaldjur","ej blötdjur"]);
-const EXCLUDE = new Set(["laktos","nötter","mandel","blodmat"]);   // hanteras som standard -> räknas ej
+const EXCLUDE = new Set(["laktos","nötter","mandel","blodmat","fläsk","ramadan","ungdom"]);   // hanteras som standard -> räknas ej
 function comps(spec){
   let s=spec.replace(/\s*\(REL\)/g,"").trim(); if(!s) return [];
   let annat=null,mis=null,m;
@@ -186,9 +187,18 @@ function comps(spec){
   if(mis) mis.split(",").map(x=>x.trim()).filter(Boolean).forEach(al=> out.push("-"+cap(al.replace(/^-+/,"").trim())));
   if(annat){
     const items=annat.split(",").map(x=>x.trim()).filter(Boolean);
-    if(items.length && items.every(it=>it.replace(/^-+/,"").trim().split(/\s+/).length<=2)){
-      items.forEach(it=>{ const core=it.replace(/^-+/,"").trim(); out.push(NOTFOOD.has(core.toLowerCase())?cap(core):"-"+cap(core)); });
-    } else out.push(annat.trim());
+    const MARK=/^(-+|ej|no|inte|utan|ingen|inga|minus)\s*(.+)$/i;   // "evita": - ej no inte utan ingen inga minus
+    const push1=(core)=>{ core=core.replace(/^-+/,"").trim(); out.push(NOTFOOD.has(core.toLowerCase())?cap(core):"-"+cap(core)); };
+    const rest=[];
+    for(const it of items){
+      const m=it.match(MARK);
+      if(m && m[2].trim().split(/\s+/).length===1) push1(m[2]);   // marcatore + una parola -> esclusione contata
+      else rest.push(it);
+    }
+    if(rest.length){
+      if(rest.every(it=>it.split(/\s+/).length<=1)) rest.forEach(push1);   // solo parole singole -> cibi
+      else out.push(rest.join(", "));                                        // nota libera -> Särskilt
+    }
   }
   return out;
 }
