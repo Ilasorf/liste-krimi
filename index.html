@@ -95,7 +95,7 @@ async function parsePdf(buf){
       if(!datum){ const dm = text.replace(/\s+/g,"").match(/\d{4}-\d{2}-\d{2}/); if(dm) datum = dm[0]; }
       if(!seenPerson && !/^\d{4}\/\d+/.test(text)){
         const sm = text.match(/^(.*?)\s*(\d+)\s+(\d+)$/);
-        if(sm){ const lab=sm[1].trim(); if(lab==="" || /^H\d+$/.test(lab) || lab==="Totalt") summary.push([lab,sm[2],sm[3]]); }
+        if(sm){ const lab=sm[1].trim(); if(lab==="" || /^\S+$/.test(lab)) summary.push([lab,sm[2],sm[3]]); }
       }
       const boundary = (specX!=null? specX-12 : 220);
       const rightText = sorted.filter(o=>o.x>=boundary).map(o=>o.str).join(" ").replace(/\s+/g," ").trim();
@@ -103,7 +103,7 @@ async function parsePdf(buf){
         // vänster kolumn = Inskrivningsnr + Avdelning (+ ev. namn som IGNORERAS)
         const leftText = sorted.filter(o=>o.x<boundary).map(o=>o.str).join(" ");
         const im = leftText.match(/(\d{4}\/\d+)/);
-        const am = leftText.match(/(H\d+\/\d+:\d+)/);
+        const am = leftText.match(/([A-Za-zÅÄÖåäö0-9]+\/\d+:\d+)/);
         cur = {insk: im?im[1]:"", avd: am?am[1]:"", spec: rightText};  // namn läses aldrig
         people.push(cur); seenPerson=true;
         continue;
@@ -171,7 +171,7 @@ function shortType(spec){
   }
   return parts.join(", ");
 }
-const wardOf = avd => { const m=(avd||"").match(/^H?(\d+)\//); return m?m[1]:""; };
+const wardOf = avd => { const w=(avd||"").split("/")[0]; return w.replace(/^H/,""); };
 const shortNum = insk => { const m=(insk||"").match(/^\d{2}(\d{2})\/(\d+)$/); return m? m[1]+"/"+m[2] : insk; };
 
 /* ---------- Summa per kost (conteggio per tipo) ---------- */
