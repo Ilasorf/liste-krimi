@@ -1,7 +1,13 @@
 <!DOCTYPE html>
+<!--
+  Matlistor — Kriminalvården Västervik
+  Author: Simone Frosali © 2026 — Västervik Norra Köket
+  All rights reserved. Tool runs entirely client-side; no data leaves the browser.
+-->
 <html lang="sv">
 <head>
 <meta charset="utf-8">
+<meta name="author" content="Simone Frosali">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Matlistor — rensning & etiketter</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -59,7 +65,7 @@
     Regler: “Ej Fläsk”, “Ramadan” och “Ungdom” tas alltid bort. Nötter/Mandel/Laktos/Ej Blodmat tas bort endast när de står ensamma; annars behålls raden (Nötter/Mandel markeras för kontroll). Allergener och korta Annat-livsmedel får “-” framför; instruktioner (t.ex. Diabetes, Hjärtproblem) förblir text.<br>
     Säkerhet: rader raderas aldrig. Varje enhet visar <i>Angivet = Lästa</i>: stämmer det inte, kontrollera manuellt.
   </p>
-  <p style="text-align:center;color:#9aa3b0;font-size:12px;margin-top:20px">Powered by <b>Simone</b> \u00b7 Västervik Norra Köket</p>
+  <p style="text-align:center;color:#9aa3b0;font-size:12px;margin-top:20px">Powered by <b>Simone Frosali</b> · 2026 · Västervik Norra Köket</p>
 </div>
 
 <script>
@@ -175,52 +181,63 @@ const wardOf = avd => { const w=(avd||"").split("/")[0]; return w.replace(/^H/,"
 const shortNum = insk => { const m=(insk||"").match(/^\d{2}(\d{2})\/(\d+)$/); return m? m[1]+"/"+m[2] : insk; };
 
 /* ---------- Summa per kost (conteggio per tipo) ---------- */
-const CLEAN_MULTI = new Set(["vegetarisk","specialkost utan intyg","ej skaldjur","ej blötdjur"]);
-const EXCLUDE = new Set(["laktos","nötter","mandel","blodmat","fläsk","ramadan","ungdom"]);   // hanteras som standard -> räknas ej
-function comps(spec){
-  let s=spec.replace(/\s*\(REL\)/g,"").trim(); if(!s) return [];
-  let annat=null,mis=null,m;
+const EXCLUDE = new Set(["laktos","nötter","mandel","blodmat","fläsk","ramadan","ungdom"]);  // hanteras som standard
+const normK  = k => k.replace(/\.$/,"").replace(/frukter\b/,"frukt");
+const coreK  = k => k.replace(/^-+/,"").trim().toLowerCase();
+function analyzePerson(spec){
+  let s=spec.replace(/\s*\(REL\)/g,"").trim();
+  const counted=[]; let noteText=null;
+  if(!s) return {counted, noteText};
+  let annat=null, mis=null, m;
   m=s.match(/Annat:\s*([\s\S]*)$/i); if(m){annat=m[1].trim(); s=s.slice(0,m.index).replace(/[\s,]+$/,"");}
   m=s.match(/MIS:\s*([\s\S]*)$/i);   if(m){mis=m[1].trim();   s=s.slice(0,m.index).replace(/[\s,]+$/,"");}
-  const out=[];
-  s.split(",").map(x=>x.trim()).filter(Boolean).forEach(it=> out.push(it.replace(/Vegetarisk kost/i,"Vegetarisk")));
-  if(mis) mis.split(",").map(x=>x.trim()).filter(Boolean).forEach(al=> out.push("-"+cap(al.replace(/^-+/,"").trim())));
+  const addFood=core=>{ core=core.replace(/^-+/,"").trim(); if(core) counted.push("-"+cap(core)); };
+  // voci prima di MIS/Annat (Vegetarisk, Ej Blodmat, Ej Skaldjur, Specialkost utan intyg...)
+  s.split(",").map(x=>x.trim()).filter(Boolean).forEach(it=> counted.push(it.replace(/Vegetarisk kost/i,"Vegetarisk")));
+  // allergeni MIS -> "-X"
+  if(mis) mis.split(",").map(x=>x.trim()).filter(Boolean).forEach(al=> counted.push("-"+cap(al.replace(/^-+/,"").trim())));
+  // Annat: estrai le esclusioni (- / ej / no / ...) anche dentro le note; il resto -> nota completa
   if(annat){
     const items=annat.split(",").map(x=>x.trim()).filter(Boolean);
-    const MARK=/^(-+|ej|no|inte|utan|ingen|inga|minus)\s*(.+)$/i;   // "evita": - ej no inte utan ingen inga minus
-    const push1=(core)=>{ core=core.replace(/^-+/,"").trim(); out.push(NOTFOOD.has(core.toLowerCase())?cap(core):"-"+cap(core)); };
     const rest=[];
     for(const it of items){
-      const m=it.match(MARK);
-      if(m && m[2].trim().split(/\s+/).length===1) push1(m[2]);   // marcatore + una parola -> esclusione contata
+      const isDash=/^-/.test(it);
+      const mk=it.match(/^(ej|no|inte|utan|ingen|inga|minus)\s+(\S+)$/i);
+      if(isDash){
+        const core=it.replace(/^-+\s*/,"").trim();
+        if(core.split(/\s+/).length<=2 && !/[\/()]/.test(core)) addFood(core);   // cibo semplice -> conta
+        else rest.push(it);                                                        // complesso -> nota
+      } else if(mk){ addFood(mk[2]); }                                              // "ej lök" -> -Lök
       else rest.push(it);
     }
     if(rest.length){
-      if(rest.every(it=>it.split(/\s+/).length<=1)) rest.forEach(push1);   // solo parole singole -> cibi
-      else out.push(rest.join(", "));                                        // nota libera -> Särskilt
+      if(rest.every(it=> !/[\/()]/.test(it) && it.split(/\s+/).length<=1)){
+        let cond=false;
+        for(const it of rest){ const lc=it.toLowerCase();
+          if(lc==="ok") continue;                       // meta -> ignora
+          if(NOTFOOD.has(lc)){ cond=true; continue; }   // condizione (diabetes...) -> non conta
+          addFood(it);                                  // cibo singolo -> conta
+        }
+        if(cond) noteText=annat.trim();                 // c'era una condizione -> in Särskilt
+      } else noteText=annat.trim();                     // nota libera -> Särskilt COMPLETA
     }
   }
-  return out;
+  return {counted, noteText};
 }
-const normK  = k => k.replace(/\.$/,"").replace(/frukter\b/,"frukt");
-const coreK  = k => k.replace(/^-+/,"").trim().toLowerCase();
-const isCleanK = k => { const c=k.replace(/^-+/,"").trim(); return (c.indexOf(" ")<0) || /^Ej \S+$/i.test(c) || CLEAN_MULTI.has(c.toLowerCase()); };
 function summaCounts(people){
   const c={}; const extras=[];
   for(const p of people){ if(!p.text||!p.text.trim()) continue;
-    const sar=[];
-    for(const comp of comps(p.text)){ const k=normK(comp);
+    const {counted, noteText}=analyzePerson(p.text);
+    for(let k of counted){ k=normK(k);
       const ck=coreK(k); if(EXCLUDE.has(ck) || (ck.startsWith("ej ") && EXCLUDE.has(ck.slice(3)))) continue;
-      if(!isCleanK(k)){ sar.push(comp); continue; }
       c[k]=(c[k]||0)+1;
     }
-    if(sar.length) extras.push({ward:wardOf(p.avd), num:shortNum(p.insk), text:sar.join(", ")});
+    if(noteText) extras.push({ward:wardOf(p.avd), num:shortNum(p.insk), text:noteText});
   }
   let rows=Object.entries(c).sort((a,b)=> b[1]-a[1] || a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
   rows=rows.map(([k,v])=> [k==="Specialkost utan intyg"?"SK u. intyg":k, v]);
   return {rows, extras};
 }
-
 /* ---------- PDF: rensad lista ---------- */
 function buildLists(sections){
   const doc = new jsPDF({unit:"mm",format:"a4"});
