@@ -184,6 +184,13 @@ const shortNum = insk => { const m=(insk||"").match(/^\d{2}(\d{2})\/(\d+)$/); re
 const EXCLUDE = new Set(["laktos","nötter","mandel","blodmat","fläsk","ramadan","ungdom"]);  // hanteras som standard
 const normK  = k => k.replace(/\.$/,"").replace(/frukter\b/,"frukt");
 const coreK  = k => k.replace(/^-+/,"").trim().toLowerCase();
+const ONION = new Set(["lök","rödlök","purjolök","löpulver"]);
+const canon = k => { k=normK(k); const c=coreK(k);
+  if(ONION.has(c)) return "-Lök";
+  if(c==="blötdjur"||c==="ej blötdjur") return "-Blötdjur";
+  if(c==="skaldjur"||c==="ej skaldjur") return "-Skaldjur";
+  return k;
+};
 function analyzePerson(spec){
   let s=spec.replace(/\s*\(REL\)/g,"").trim();
   const counted=[]; let noteText=null;
@@ -228,8 +235,10 @@ function summaCounts(people){
   const c={}; const extras=[];
   for(const p of people){ if(!p.text||!p.text.trim()) continue;
     const {counted, noteText}=analyzePerson(p.text);
-    for(let k of counted){ k=normK(k);
+    const seen=new Set();
+    for(let k of counted){ k=canon(k);
       const ck=coreK(k); if(EXCLUDE.has(ck) || (ck.startsWith("ej ") && EXCLUDE.has(ck.slice(3)))) continue;
+      if(seen.has(k)) continue; seen.add(k);   // una volta per persona (famiglie raggruppate)
       c[k]=(c[k]||0)+1;
     }
     if(noteText) extras.push({ward:wardOf(p.avd), num:shortNum(p.insk), text:noteText});
