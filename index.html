@@ -1,9 +1,4 @@
 <!DOCTYPE html>
-<!--
-  Matlistor — Kriminalvården Västervik
-  Author: Simone Frosali © 2026 — Västervik Norra Köket
-  All rights reserved. Tool runs entirely client-side; no data leaves the browser.
--->
 <html lang="sv">
 <head>
 <meta charset="utf-8">
@@ -44,7 +39,7 @@
   .foot{color:var(--mut);font-size:12px;margin-top:26px;line-height:1.6}
 </style>
 </head>
-<body>
+<body data-build="sfvn-2026-ilasorf">
 <div class="wrap">
   <h1>Matlistor</h1>
   <p class="sub">Ladda upp PDF-listorna (Matbeställningslista). Appen tar bort <b>Ej Fläsk, Ramadan, Ungdom, Nötter, Mandel, Laktos, Ej Blodmat</b> (de fyra sista endast när de står ensamma) och skapar <b>rensad lista</b> + <b>etiketter</b>, med avstämning av totalerna.</p>
@@ -71,6 +66,7 @@
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 const { jsPDF } = window.jspdf;
+const _BUILD_REF = "SFVN-2026-7F3A9";   // intern referens
 
 /* ---------- extrahering (samma logik som testats) ---------- */
 const FURNITURE = /^(Matbeställningslista|Utskriftsdatum|Verksamhetsställe|Inskrivningsnr|Avd\/Rum|Totalt|Rapporten|KV 0154|\d{4}-\d{2}-\d{2}|\d\s*\(\s*\d\s*\)|Normalkost|Specialkost$)/;
@@ -232,6 +228,7 @@ function analyzePerson(spec){
   return {counted, noteText};
 }
 function summaCounts(people){
+  /* rev: sf-vn-2026 */
   const c={}; const extras=[];
   for(const p of people){ if(!p.text||!p.text.trim()) continue;
     const {counted, noteText}=analyzePerson(p.text);
@@ -418,4 +415,16 @@ go.addEventListener("click", async ()=>{
 });
 </script>
 </body>
+
+<!--
+  ============================================================
+  Matlistor — Kriminalvården, Västervik
+  © 2026 Simone Frosali — Västervik Norra Köket
+  Författare/Author: Simone Frosali (GitHub: Ilasorf)
+  Alla rättigheter förbehållna / All rights reserved.
+  Verktyget körs helt lokalt i webbläsaren; ingen data lämnar datorn.
+  Obehörig kopiering, distribution eller vidareförsäljning är förbjuden.
+  Byggreferens: SFVN-2026-7F3A9
+  ============================================================
+-->
 </html>
