@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="author" content="Simone Frosali">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Matlistor TEST — fläsk-räkning</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  :root{ --ink:#1c2230; --mut:#5a6473; --line:#d7dce4; --accent:#2f6bff; }
+  *{box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);margin:0;background:#f4f6fa}
+  .wrap{max-width:760px;margin:0 auto;padding:28px 18px 60px}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--mut);font-size:14px;margin:0 0 22px;line-height:1.5}
+  .privacy{background:#eef4ff;border:1px solid #cfe0ff;color:#1e3a8a;font-size:13px;padding:10px 12px;border-radius:10px;margin-bottom:20px}
+  #drop{border:2px dashed var(--line);border-radius:14px;background:#fff;padding:30px 20px;text-align:center;cursor:pointer;transition:.15s}
+  #drop.over{border-color:var(--accent);background:#f5f8ff}
+  #drop b{color:var(--accent)}
+  #drop small{display:block;color:var(--mut);margin-top:6px}
+  #files{list-style:none;padding:0;margin:14px 0 0}
+  #files li{background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:14px;margin-bottom:6px;display:flex;justify-content:space-between}
+  #files li span.rm{color:#c62828;cursor:pointer}
+  button.go{margin-top:16px;width:100%;background:var(--accent);color:#fff;border:0;border-radius:10px;padding:14px;font-size:16px;font-weight:600;cursor:pointer}
+  button.go:disabled{background:#9db4e8;cursor:default}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:18px}
+  .rec{border-radius:10px;padding:10px 12px;font-size:14px;margin-bottom:10px;line-height:1.5}
+  .rec.ok{background:#e8f5e9;border:1px solid #a5d6a7}
+  .rec.bad{background:#fdecea;border:1px solid #ef9a9a}
+  .rec b{display:block;margin-bottom:2px}
+  .dl{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .dl a{flex:1;text-align:center;text-decoration:none;background:#132038;color:#fff;padding:12px;border-radius:10px;font-weight:600;font-size:15px;min-width:180px}
+  .err{color:#c62828;font-size:14px;margin-top:10px;white-space:pre-wrap}
+  .adj{margin-top:14px;font-size:13px;color:var(--mut)}
+  .adj input{width:64px;padding:6px;border:1px solid var(--line);border-radius:6px;margin:0 3px}
+  .adj small{display:block;margin-top:4px;font-size:12px}
+  .foot{color:var(--mut);font-size:12px;margin-top:26px;line-height:1.6}
+</style>
+</head>
+<body data-build="sfvn-2026-ilasorf">
+<div class="wrap">
+  <h1>Matlistor <span style="background:#ffd24d;color:#000;font-size:12px;padding:2px 8px;border-radius:6px;vertical-align:middle">TEST</span></h1>
+  <p class="sub">Ladda upp PDF-listorna (Matbeställningslista). Appen tar bort <b>Ej Fläsk, Ramadan, Ungdom, Nötter, Mandel, Laktos, Ej Blodmat</b> (de fyra sista endast när de står ensamma) och skapar <b>rensad lista</b> + <b>etiketter</b>, med avstämning av totalerna.</p>
+  <div class="privacy">🔒 PDF-filerna laddas <b>inte upp någonstans</b>: allt sker här i webbläsaren, uppgifterna lämnar aldrig den här datorn.</div>
+
+  <div id="drop">
+    <b>Dra PDF-filerna hit</b> eller klicka för att välja<small>du kan ladda upp flera (t.ex. Norra + Häktet)</small>
+    <input id="file" type="file" accept="application/pdf" multiple hidden>
+  </div>
+  <ul id="files"></ul>
+  <div class="adj">Justering skrivare (mm) — X <input id="dx" type="number" value="0" step="0.5"> Y <input id="dy" type="number" value="0" step="0.5">
+    <small>Etiketter 70×37 mm, 24 per ark (3×8). Skriv ut i <b>100 % / verklig storlek</b> (inte “anpassa till sidan”). Om texten hamnar snett, justera X/Y med några mm.</small></div>
+  <button class="go" id="go" disabled>Skapa rensad lista + etiketter</button>
+
+  <div id="out"></div>
+
+  <p class="foot">
+    Regler: “Ej Fläsk”, “Ramadan” och “Ungdom” tas alltid bort. Nötter/Mandel/Laktos/Ej Blodmat tas bort endast när de står ensamma; annars behålls raden (Nötter/Mandel markeras för kontroll). Allergener och korta Annat-livsmedel får “-” framför; instruktioner (t.ex. Diabetes, Hjärtproblem) förblir text.<br>
+    Säkerhet: rader raderas aldrig. Varje enhet visar <i>Angivet = Lästa</i>: stämmer det inte, kontrollera manuellt.
+  </p>
+  <p style="text-align:center;color:#9aa3b0;font-size:12px;margin-top:20px">Powered by <b>Simone Frosali</b> · 2026 · Västervik Norra Köket</p>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const { jsPDF } = window.jspdf;
+const _BUILD_REF = "SFVN-2026-7F3A9";   // intern referens
+
+/* ---------- extrahering (samma logik som testats) ---------- */
+const FURNITURE = /^(Matbeställningslista|Utskriftsdatum|Verksamhetsställe|Inskrivningsnr|Avd\/Rum|Totalt|Rapporten|KV 0154|\d{4}-\d{2}-\d{2}|\d\s*\(\s*\d\s*\)|Normalkost|Specialkost$)/;
+
+async function parsePdf(buf){
+  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  let facility="", declared=null, specX=null, datum="";
+  const summary=[], people=[]; let cur=null, seenPerson=false;
+  for(let p=1;p<=pdf.numPages;p++){
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    const its = tc.items.filter(i=>i.str!=null).map(i=>({str:i.str, x:i.transform[4], y:i.transform[5]}));
+    its.sort((a,b)=> (b.y-a.y) || (a.x-b.x));
+    const lines=[]; let cy=null, bb=[];
+    for(const it of its){
+      if(cy===null || Math.abs(it.y-cy)<=3){ bb.push(it); if(cy===null) cy=it.y; }
+      else { lines.push(bb); bb=[it]; cy=it.y; }
+    }
+    if(bb.length) lines.push(bb);
+    for(const ln of lines){
+      const sorted = ln.slice().sort((a,b)=>a.x-b.x);
+      const text = sorted.map(o=>o.str).join(" ").replace(/\s+/g," ").trim();
+      if(!text) continue;
+      const x0 = sorted[0].x;
+      if(/Inskrivningsnr/.test(text)){ const sp = sorted.find(o=>/Specialkost/.test(o.str)); if(sp) specX = sp.x; }
+      const fm = text.match(/Verksamhetsställe:\s*(.+)/); if(fm && !facility) facility = fm[1].trim();
+      const tm = text.match(/^Totalt\b.*?(\d+)\s+(\d+)\s*$/); if(tm) declared = parseInt(tm[2],10);
+      if(!datum){ const dm = text.replace(/\s+/g,"").match(/\d{4}-\d{2}-\d{2}/); if(dm) datum = dm[0]; }
+      if(!seenPerson && !/^\d{4}\/\d+/.test(text)){
+        const sm = text.match(/^(.*?)\s*(\d+)\s+(\d+)$/);
+        if(sm){ const lab=sm[1].trim(); if(lab==="" || /^\S+$/.test(lab)) summary.push([lab,sm[2],sm[3]]); }
+      }
+      const boundary = (specX!=null? specX-12 : 220);
+      const rightText = sorted.filter(o=>o.x>=boundary).map(o=>o.str).join(" ").replace(/\s+/g," ").trim();
+      if(/^\d{4}\/\d+/.test(text)){
+        // vänster kolumn = Inskrivningsnr + Avdelning (+ ev. namn som IGNORERAS)
+        const leftText = sorted.filter(o=>o.x<boundary).map(o=>o.str).join(" ");
+        const im = leftText.match(/(\d{4}\/\d+)/);
+        const am = leftText.match(/([A-Za-zÅÄÖåäö0-9]+\/\d+:\d+)/);
+        cur = {insk: im?im[1]:"", avd: am?am[1]:"", spec: rightText};  // namn läses aldrig
+        people.push(cur); seenPerson=true;
+        continue;
+      }
+      if(FURNITURE.test(text)){ cur=null; continue; }
+      if(cur && rightText){ cur.spec = (cur.spec+" "+rightText).trim(); }  // fortsättning, endast Specialkost-kolumnen
+    }
+  }
+  people.forEach(p=> p.spec = p.spec.replace(/-\s+/g,"-"));   // '- Ost' -> '-Ost'
+  return {facility, declared, summary, people, datum};
+}
+
+/* ---------- rensning ---------- */
+const WORD = /[0-9A-Za-zÀ-ÿåäöÅÄÖ]+/g;
+// tas bort endast när de står ensamma:
+const SOLE_RX = /(\bNötter\b|\bMandel\b|\bLaktos\b|Ej\s+Blodmat)/i;
+// om blandade med annat riktigt innehåll: markera (allvarliga allergener)
+const FLAG_RX = /\b(Nötter|Mandel)\b/i;
+function residualAfterSole(s){
+  let t = s.replace(/\bMIS:/gi,"").replace(/\bAnnat:/gi,"")
+           .replace(/Ej\s+Blodmat(\s*\(REL\))?/gi,"")
+           .replace(/\b(Nötter|Mandel|Laktos)\b/gi,"");
+  return t.replace(/[^0-9A-Za-zÀ-ÿåäöÅÄÖ]+/g," ").trim();
+}
+function cleanup(s){
+  s = s.replace(/\s*,(\s*,)+/g,",").replace(/\s+,/g,",").replace(/[ \t]{2,}/g," ");
+  return s.replace(/^[\s,]+|[\s,]+$/g,"");
+}
+function cleanSpec(spec){
+  const hasNoise = /Ej\s+Fläsk/i.test(spec) || /\bRamadan\b/i.test(spec) || /\bUngdom\b/i.test(spec);
+  const hasSole  = SOLE_RX.test(spec);
+  if(!hasNoise && !hasSole) return {text:spec, flag:""};
+  let s = spec.replace(/Ej\s+Fläsk(\s*\(REL\))?/gi,"").replace(/\bRamadan\b/gi,"").replace(/\bUngdom\b/gi,"");
+  if(hasSole){
+    if(residualAfterSole(s)==="") return {text:"", flag:""};   // bara Nötter/Mandel/Laktos -> tom
+    if(FLAG_RX.test(spec)) return {text:spec, flag:"review"};   // Nötter/Mandel blandat -> markera, orört
+    // enbart Laktos blandat med annat -> behåll Laktos, ta bort endast bruset
+  }
+  s = cleanup(s);
+  const ow = new Set((spec.toLowerCase().match(WORD)||[]));
+  const nw = (s.toLowerCase().match(WORD)||[]);
+  if(!nw.every(w=>ow.has(w))) return {text:spec, flag:"review"};
+  return {text:s, flag:""};
+}
+
+/* ---------- etikett-typ ---------- */
+const NOTFOOD = new Set(["diabetes","diab","ungdom","ok"]);
+const cap = x => x ? x.charAt(0).toUpperCase()+x.slice(1) : x;
+function shortType(spec){
+  let s = spec.replace(/\s*\(REL\)/g,"").trim();
+  if(!s) return "";
+  let annat=null, mis=null, m;
+  m = s.match(/Annat:\s*([\s\S]*)$/i); if(m){ annat=m[1].trim(); s=s.slice(0,m.index).replace(/[\s,]+$/,""); }
+  m = s.match(/MIS:\s*([\s\S]*)$/i);   if(m){ mis=m[1].trim();   s=s.slice(0,m.index).replace(/[\s,]+$/,""); }
+  const parts=[];
+  s.split(",").map(x=>x.trim()).filter(Boolean).forEach(it=> parts.push(it.replace(/Vegetarisk kost/i,"Vegetarisk")));
+  if(mis) mis.split(",").map(x=>x.trim()).filter(Boolean).forEach(al=> parts.push("-"+cap(al.replace(/^-+/,"").trim())));
+  if(annat){
+    const items = annat.split(",").map(x=>x.trim()).filter(Boolean);
+    const wc = it => it.replace(/^-+/,"").trim().split(/\s+/).length;
+    if(items.length && items.every(it=>wc(it)<=2)){
+      items.forEach(it=>{ const core=it.replace(/^-+/,"").trim();
+        parts.push(NOTFOOD.has(core.toLowerCase()) ? cap(core) : "-"+cap(core)); });
+    } else parts.push(annat.trim());
+  }
+  return parts.join(", ");
+}
+const wardOf = avd => { const w=(avd||"").split("/")[0]; return w.replace(/^H/,""); };
+const shortNum = insk => { const m=(insk||"").match(/^\d{2}(\d{2})\/(\d+)$/); return m? m[1]+"/"+m[2] : insk; };
+
+/* ---------- Summa per kost (conteggio per tipo) ---------- */
+const EXCLUDE = new Set(["laktos","nötter","mandel","blodmat","fläsk","ramadan","ungdom"]);  // hanteras som standard
+const normK  = k => k.replace(/\.$/,"").replace(/frukter\b/,"frukt");
+const coreK  = k => k.replace(/^-+/,"").trim().toLowerCase();
+const ONION = new Set(["lök","rödlök","purjolök","löpulver"]);
+const canon = k => { k=normK(k); const c=coreK(k);
+  if(ONION.has(c)) return "-Lök";
+  if(c==="blötdjur"||c==="ej blötdjur") return "-Blötdjur";
+  if(c==="skaldjur"||c==="ej skaldjur") return "-Skaldjur";
+  return k;
+};
+function analyzePerson(spec){
+  let s=spec.replace(/\s*\(REL\)/g,"").trim();
+  const counted=[]; let noteText=null;
+  if(!s) return {counted, noteText};
+  let annat=null, mis=null, m;
+  m=s.match(/Annat:\s*([\s\S]*)$/i); if(m){annat=m[1].trim(); s=s.slice(0,m.index).replace(/[\s,]+$/,"");}
+  m=s.match(/MIS:\s*([\s\S]*)$/i);   if(m){mis=m[1].trim();   s=s.slice(0,m.index).replace(/[\s,]+$/,"");}
+  const addFood=core=>{ core=core.replace(/^-+/,"").trim(); if(core) counted.push("-"+cap(core)); };
+  // voci prima di MIS/Annat (Vegetarisk, Ej Blodmat, Ej Skaldjur, Specialkost utan intyg...)
+  s.split(",").map(x=>x.trim()).filter(Boolean).forEach(it=> counted.push(it.replace(/Vegetarisk kost/i,"Vegetarisk")));
+  // allergeni MIS -> "-X"
+  if(mis) mis.split(",").map(x=>x.trim()).filter(Boolean).forEach(al=> counted.push("-"+cap(al.replace(/^-+/,"").trim())));
+  // Annat: estrai le esclusioni (- / ej / no / ...) anche dentro le note; il resto -> nota completa
+  if(annat){
+    const items=annat.split(",").map(x=>x.trim()).filter(Boolean);
+    const rest=[];
+    for(const it of items){
+      const isDash=/^-/.test(it);
+      const mk=it.match(/^(ej|no|inte|utan|ingen|inga|minus)\s+(\S+)$/i);
+      if(isDash){
+        const core=it.replace(/^-+\s*/,"").trim();
+        if(core.split(/\s+/).length<=2 && !/[\/()]/.test(core)) addFood(core);   // cibo semplice -> conta
+        else rest.push(it);                                                        // complesso -> nota
+      } else if(mk){ addFood(mk[2]); }                                              // "ej lök" -> -Lök
+      else rest.push(it);
+    }
+    if(rest.length){
+      if(rest.every(it=> !/[\/()]/.test(it) && it.split(/\s+/).length<=1)){
+        let cond=false;
+        for(const it of rest){ const lc=it.toLowerCase();
+          if(lc==="ok") continue;                       // meta -> ignora
+          if(NOTFOOD.has(lc)){ cond=true; continue; }   // condizione (diabetes...) -> non conta
+          addFood(it);                                  // cibo singolo -> conta
+        }
+        if(cond) noteText=annat.trim();                 // c'era una condizione -> in Särskilt
+      } else noteText=annat.trim();                     // nota libera -> Särskilt COMPLETA
+    }
+  }
+  return {counted, noteText};
+}
+function flaskPerWard(section){
+  const norm={}; (section.summary||[]).forEach(r=>{ const lab=(r[0]||"").trim(); if(lab && lab!=="Totalt") norm[lab]=parseInt(r[1])||0; });
+  const ejf={}, veg={}, wards=new Set(Object.keys(norm));
+  (section.raw||[]).forEach(p=>{ const w=(p.avd||"").split("/")[0].trim(); if(!w) return; wards.add(w);
+    if(/Ej\s+Fläsk/i.test(p.spec||"")) ejf[w]=(ejf[w]||0)+1;
+    if(/Vegetarisk/i.test(p.spec||"")) veg[w]=(veg[w]||0)+1;
+  });
+  const rows=[...wards].sort((a,b)=>a.localeCompare(b,"sv")).map(w=>({ward:w, norm:norm[w]||0, ejf:ejf[w]||0, veg:veg[w]||0}));
+  const tot={ward:"Totalt", norm:0, ejf:0, veg:0};
+  rows.forEach(r=>{tot.norm+=r.norm; tot.ejf+=r.ejf; tot.veg+=r.veg;});
+  return {rows, tot};
+}
+function summaCounts(people){
+  /* rev: sf-vn-2026 */
+  const c={}; const extras=[];
+  for(const p of people){ if(!p.text||!p.text.trim()) continue;
+    const {counted, noteText}=analyzePerson(p.text);
+    const seen=new Set();
+    for(let k of counted){ k=canon(k);
+      const ck=coreK(k); if(EXCLUDE.has(ck) || (ck.startsWith("ej ") && EXCLUDE.has(ck.slice(3)))) continue;
+      if(seen.has(k)) continue; seen.add(k);   // una volta per persona (famiglie raggruppate)
+      c[k]=(c[k]||0)+1;
+    }
+    if(noteText) extras.push({ward:wardOf(p.avd), num:shortNum(p.insk), text:noteText});
+  }
+  let rows=Object.entries(c).sort((a,b)=> b[1]-a[1] || a[0].toLowerCase().localeCompare(b[0].toLowerCase()));
+  rows=rows.map(([k,v])=> [k==="Specialkost utan intyg"?"SK u. intyg":k, v]);
+  return {rows, extras};
+}
+/* ---------- PDF: rensad lista ---------- */
+function buildLists(sections){
+  const doc = new jsPDF({unit:"mm",format:"a4"});
+  const gcnt = summaCounts(sections.flatMap(s=>s.people));   // Summa per kost combinerad
+  sections.forEach((sec,i)=>{
+    if(i) doc.addPage();
+    doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.setTextColor(20);
+    doc.text("Matbeställningslista",105,15,{align:"center"});
+    doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(90);
+    doc.text(sec.facility+"  ·  rensad (borttaget: Ej Fläsk, Ramadan, Ungdom, Nötter, Mandel, Laktos, Ej Blodmat ensam)",105,20,{align:"center"});
+    const ok = sec.declared===sec.extracted;
+    doc.setFillColor(ok?232:253, ok?245:236, ok?233:234);
+    doc.setDrawColor(ok?67:198, ok?160:40, ok?71:40); doc.setLineWidth(0.4);
+    doc.rect(10,24,190,14,"FD"); doc.setTextColor(20); doc.setFont("helvetica","bold");
+    doc.setFontSize(10); doc.text(ok?"AVSTÄMNING OK":"AVVIKELSE — KONTROLLERA MANUELLT",13,29.5);
+    doc.setFontSize(9);
+    doc.text(`Angivet totalt: ${sec.declared}    Lästa rader: ${sec.extracted}    Tömda: ${sec.emptied}    Med begäran: ${sec.remaining}    Att kontrollera: ${sec.review}`,13,34.5);
+    if(sec.datum){ doc.setFont("helvetica","bold"); doc.setFontSize(16); doc.setTextColor(20);
+      doc.text(sec.datum, 200, 16, {align:"right"}); doc.setTextColor(0); }
+    let y=42;
+    if(sec.summary.length){
+      // Avd/Rum-tabell (vänster) med Summa-kolumn — per enhet
+      doc.autoTable({startY:y, head:[["Avd/Rum","Norm","Spec","Summa"]],
+        body: sec.summary.map(r=>[r[0], r[1], r[2], String((parseInt(r[1])||0)+(parseInt(r[2])||0))]),
+        theme:"grid", styles:{fontSize:9, cellPadding:1.2}, headStyles:{fillColor:[238,238,238],textColor:20,fontSize:9},
+        margin:{left:10}, tableWidth:"wrap",
+        columnStyles:{0:{cellWidth:30},1:{cellWidth:16,halign:"right"},2:{cellWidth:16,halign:"right"},3:{cellWidth:20,halign:"right"}} });
+      const tblBottom = doc.lastAutoTable.finalY;
+      let botY=y;
+      if(i===0){
+        // Summa per kost KOMBINERAD (alla uppladdade listor) — endast första sidan
+        const xR = 100;
+        doc.setTextColor(0); doc.setFont("helvetica","bold"); doc.setFontSize(11);
+        doc.text("Summa per kost", xR, y+3.5);
+        doc.setDrawColor(180); doc.setLineWidth(0.3); doc.line(xR, y+5, 200, y+5);
+        const half = Math.ceil(gcnt.rows.length/2), cx=[xR, xR+52];
+        botY=y+5;
+        for(let ci=0; ci<2; ci++){
+          let yy=y+10;
+          for(const [label,v] of gcnt.rows.slice(ci*half,(ci+1)*half)){
+            doc.setFont("helvetica","bold"); doc.setFontSize(10.5); doc.text(String(v), cx[ci], yy);
+            doc.setFont("helvetica","normal"); doc.text(label, cx[ci]+7, yy);
+            yy+=5.6;
+          }
+          botY=Math.max(botY,yy);
+        }
+      }
+      y = Math.max(tblBottom, botY) + 4;
+      if(i===0 && gcnt.extras.length){
+        doc.setTextColor(0);
+        doc.setFont("helvetica","bold"); doc.setFontSize(10);
+        doc.text("Särskilt", 10, y+1);
+        doc.setDrawColor(180); doc.setLineWidth(0.3); doc.line(10, y+2.5, 200, y+2.5);
+        y+=6;
+        doc.setFont("helvetica","normal"); doc.setFontSize(8.5);
+        const colW=93, colX=[10,107], per=Math.ceil(gcnt.extras.length/2);
+        const fit=(pre,desc,maxw)=>{ if(doc.getTextWidth(pre+desc)<=maxw) return pre+desc;
+          let d=desc; while(d.length>1 && doc.getTextWidth(pre+d+"\u2026")>maxw) d=d.slice(0,-1);
+          return pre+d.trim()+"\u2026"; };
+        let startY=y, maxBot=y;
+        for(let ci=0; ci<2; ci++){
+          let yy=startY;
+          for(const e of gcnt.extras.slice(ci*per,(ci+1)*per)){
+            doc.text(fit(`${e.ward} \u00b7 ${e.num} \u00b7 `, e.text, colW), colX[ci], yy);
+            yy+=4.6;
+          }
+          maxBot=Math.max(maxBot,yy);
+        }
+        y=maxBot+2.5;
+      }
+    }
+    doc.autoTable({startY:y, head:[["Inskrivningsnr","Avdelning","Specialkost"]],
+      body: sec.people.map(p=>[p.insk,p.avd, p.flag==="review" ? (p.text+"  ◀ KONTROLLERA") : p.text]),
+      theme:"grid", styles:{fontSize:10, cellPadding:1.2}, headStyles:{fillColor:[238,238,238],textColor:20,fontSize:9.5},
+      margin:{left:10,right:10}, columnStyles:{0:{cellWidth:33},1:{cellWidth:29},2:{cellWidth:122}},
+      didParseCell:d=>{ if(d.section==="body"){ const pp=sec.people[d.row.index]; if(pp&&pp.flag==="review") d.cell.styles.fillColor=[255,243,224]; } }
+    });
+  });
+  return doc.output("blob");
+}
+
+/* ---------- PDF: etiketter (självhäftande ark 70x37 mm, 3x8 = 24/sida) ---------- */
+function buildLabels(items, dx, dy){
+  const doc = new jsPDF({unit:"mm",format:"a4"});
+  const cols=3, rows=8, labW=70, labH=37, perPage=cols*rows;
+  const ml=0, mt=0.5;                 // 70*3=210 (hela bredden), 37*8=296 (~0.5 topp)
+  const WARD=22, NUM=20, PT=0.3528, TOPPAD=10, BOTPAD=10;
+  dx = dx||0; dy = dy||0;
+  function grid(){
+    doc.setDrawColor(120); doc.setLineWidth(0.3);
+    const y0=mt+dy, y1=mt+rows*labH+dy, x0=ml+dx, x1=ml+cols*labW+dx;
+    for(let c=1;c<cols;c++){ const x=ml+c*labW+dx; doc.line(x,y0,x,y1); }   // endast inre vertikala
+    for(let r=1;r<rows;r++){ const y=mt+r*labH+dy; doc.line(x0,y,x1,y); }   // endast inre horisontella
+  }
+  items.forEach((it,idx)=>{
+    const pos=idx%perPage;
+    if(pos===0){ if(idx) doc.addPage(); grid(); }
+    const col=pos%cols, row=Math.floor(pos/cols);
+    const x=ml+col*labW+dx, y=mt+row*labH+dy;
+    // avdelning till vänster, centrerad i höjd
+    doc.setTextColor(0); doc.setFont("helvetica","bold");
+    doc.setFontSize(WARD); doc.text(it.ward||"", x+12, y+labH/2, {align:"center", baseline:"middle"});
+    // text + nummer centrerade i ytan till höger, väl inne från linjerna
+    const cx = x + 45;
+    doc.setFontSize(NUM); doc.text(it.num||"", cx, y+labH-BOTPAD, {align:"center"});
+    const maxW = 42; let size=11, lines;
+    while(size>=6){ doc.setFontSize(size); lines=doc.splitTextToSize(it.type||"", maxW);
+      if(lines.length*(size*PT+0.7) <= labH-26) break; size-=0.5; }
+    if(it.flag==="review") doc.setTextColor(200,40,40); else doc.setTextColor(0);
+    doc.setFontSize(size); let ty=y+TOPPAD+size*PT;
+    for(const ln of lines){ doc.text(ln, cx, ty, {align:"center"}); ty += size*PT+0.7; }
+  });
+  return doc.output("blob");
+}
+
+/* ---------- UI ---------- */
+const drop=document.getElementById("drop"), fileInput=document.getElementById("file"),
+      fileList=document.getElementById("files"), go=document.getElementById("go"), out=document.getElementById("out");
+let files=[];
+function refresh(){
+  fileList.innerHTML="";
+  files.forEach((f,i)=>{ const li=document.createElement("li");
+    li.innerHTML=`<span>📄 ${f.name}</span><span class="rm" data-i="${i}">ta bort</span>`; fileList.appendChild(li); });
+  go.disabled = files.length===0;
+}
+fileList.addEventListener("click",e=>{ if(e.target.classList.contains("rm")){ files.splice(+e.target.dataset.i,1); refresh(); }});
+drop.addEventListener("click",()=>fileInput.click());
+fileInput.addEventListener("change",()=>{ addFiles(fileInput.files); fileInput.value=""; });
+["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>addFiles(e.dataTransfer.files));
+function addFiles(list){ for(const f of list){ if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)) files.push(f); }
+  files.sort((a,b)=>a.name.localeCompare(b.name)); refresh(); }
+
+go.addEventListener("click", async ()=>{
+  out.innerHTML=""; go.disabled=true; go.textContent="Bearbetar…";
+  try{
+    const sections=[], labelItems=[];
+    for(const f of files){
+      const buf = await f.arrayBuffer();
+      const {facility, declared, summary, people, datum} = await parsePdf(buf);
+      const cleaned = people.map(p=>{ const c=cleanSpec(p.spec); return {insk:p.insk, avd:p.avd, text:c.text, flag:c.flag}; });
+      const emptied = cleaned.filter(p=>p.text==="").length;
+      const review  = cleaned.filter(p=>p.flag==="review").length;
+      const extracted = cleaned.length;
+      sections.push({facility:facility||f.name, declared, summary, people:cleaned, raw:people, datum,
+                     extracted, emptied, review, remaining:extracted-emptied});
+      cleaned.filter(p=>p.text!=="").forEach(p=>labelItems.push(
+        {ward:wardOf(p.avd), type:shortType(p.text), num:shortNum(p.insk), flag:p.flag}));
+    }
+    const listURL=URL.createObjectURL(buildLists(sections));
+    const dx=parseFloat(document.getElementById("dx").value)||0;
+    const dy=parseFloat(document.getElementById("dy").value)||0;
+    const labURL =URL.createObjectURL(buildLabels(labelItems, dx, dy));
+    const card=document.createElement("div"); card.className="card";
+    sections.forEach(s=>{ const ok=s.declared===s.extracted; const d=document.createElement("div");
+      d.className="rec "+(ok?"ok":"bad");
+      d.innerHTML=`<b>${s.facility} — ${ok?"AVSTÄMNING OK ✓":"⚠ AVVIKELSE, kontrollera manuellt"}</b>
+        Angivet ${s.declared==null?"?":s.declared} · Lästa ${s.extracted} · Tömda ${s.emptied} · Med begäran ${s.remaining} · Att kontrollera ${s.review}`;
+      card.appendChild(d); });
+    const dl=document.createElement("div"); dl.className="dl";
+    dl.innerHTML=`<a href="${listURL}" download="rensad_lista.pdf">⬇︎ Rensad lista</a>
+                  <a href="${labURL}" download="etiketter.pdf">⬇︎ Etiketter (${labelItems.length})</a>`;
+    card.appendChild(dl);
+    // --- Fläsk-räkning per avdelning (på begäran) ---
+    const fbtn=document.createElement("button"); fbtn.textContent="Visa fläsk-räkning per avdelning";
+    fbtn.style.cssText="margin-top:14px;width:100%;background:#132038;color:#fff;border:0;border-radius:10px;padding:12px;font-size:15px;font-weight:600;cursor:pointer";
+    const fbox=document.createElement("div"); fbox.style.marginTop="12px"; fbox.style.display="none";
+    fbtn.addEventListener("click",()=>{
+      if(fbox.style.display==="none"){
+        fbox.innerHTML="";
+        sections.forEach(sec=>{
+          const {rows,tot}=flaskPerWard(sec);
+          const h=document.createElement("div"); h.style.cssText="font-weight:700;margin:10px 0 4px";
+          h.textContent=sec.facility; fbox.appendChild(h);
+          let html='<table style="width:100%;border-collapse:collapse;font-size:15px"><tr style="background:#eee;font-weight:700"><td style=\'padding:5px 8px\'>Avdelning</td><td style=\'padding:5px 8px;text-align:right\'>Normalkost</td><td style=\'padding:5px 8px;text-align:right\'>Ej fläsk</td><td style=\'padding:5px 8px;text-align:right\'>Veg</td></tr>';
+          rows.forEach(r=>{ html+=`<tr style="border-bottom:1px solid #e3e6ec"><td style='padding:5px 8px'>${r.ward}</td><td style='padding:5px 8px;text-align:right'>${r.norm}</td><td style='padding:5px 8px;text-align:right'>${r.ejf}</td><td style='padding:5px 8px;text-align:right'>${r.veg}</td></tr>`; });
+          html+=`<tr style="font-weight:700;background:#f4f6fa"><td style='padding:5px 8px'>Totalt</td><td style='padding:5px 8px;text-align:right'>${tot.norm}</td><td style='padding:5px 8px;text-align:right'>${tot.ejf}</td><td style='padding:5px 8px;text-align:right'>${tot.veg}</td></tr></table>`;
+          const t=document.createElement("div"); t.innerHTML=html; fbox.appendChild(t);
+        });
+        fbox.style.display="block"; fbtn.textContent="Dölj fläsk-räkning";
+      } else { fbox.style.display="none"; fbtn.textContent="Visa fläsk-räkning per avdelning"; }
+    });
+    card.appendChild(fbtn); card.appendChild(fbox);
+    out.appendChild(card);
+  }catch(err){
+    const e=document.createElement("div"); e.className="err"; e.textContent="Fel: "+(err&&err.message?err.message:err); out.appendChild(e);
+  }
+  go.disabled=false; go.textContent="Skapa rensad lista + etiketter";
+});
+</script>
+</body>
+
+<!--
+  ============================================================
+  Matlistor — Kriminalvården, Västervik
+  © 2026 Simone Frosali — Västervik Norra Köket
+  Författare/Author: Simone Frosali (GitHub: Ilasorf)
+  Alla rättigheter förbehållna / All rights reserved.
+  Verktyget körs helt lokalt i webbläsaren; ingen data lämnar datorn.
+  Obehörig kopiering, distribution eller vidareförsäljning är förbjuden.
+  Byggreferens: SFVN-2026-7F3A9
+  ============================================================
+-->
+</html>
