@@ -239,6 +239,26 @@ function flaskPerWard(section){
   rows.forEach(r=>{tot.norm+=r.norm; tot.ejf+=r.ejf; tot.veg+=r.veg;});
   return {rows, tot};
 }
+function buildFlaskPdf(sections){
+  const doc=new jsPDF({unit:"mm",format:"a4"});
+  doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.text("Fläsk-räkning per avdelning",105,15,{align:"center"});
+  const datum=(sections.find(s=>s.datum)||{}).datum||"";
+  if(datum){ doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.setTextColor(90); doc.text(datum,105,21,{align:"center"}); doc.setTextColor(0); }
+  let y=28;
+  sections.forEach(sec=>{
+    const {rows,tot}=flaskPerWard(sec);
+    doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.text(sec.facility,14,y); y+=2;
+    autoTable(doc,{startY:y, head:[["Avdelning","Normalkost","Ej fläsk","Veg"]],
+      body:[...rows.map(r=>[r.ward,String(r.norm),String(r.ejf),String(r.veg)]), ["Totalt",String(tot.norm),String(tot.ejf),String(tot.veg)]],
+      theme:"grid", styles:{fontSize:10,cellPadding:1.6}, headStyles:{fillColor:[238,238,238],textColor:20},
+      columnStyles:{0:{cellWidth:45},1:{halign:"right"},2:{halign:"right"},3:{halign:"right"}},
+      margin:{left:14,right:14},
+      didParseCell:d=>{ if(d.section==="body" && d.row.index===rows.length){ d.cell.styles.fontStyle="bold"; d.cell.styles.fillColor=[244,246,250]; } }
+    });
+    y=doc.lastAutoTable.finalY+8;
+  });
+  return doc.output("blob");
+}
 function summaCounts(people){
   /* rev: sf-vn-2026 */
   const c={}; const extras=[];
@@ -436,6 +456,10 @@ go.addEventListener("click", async ()=>{
           html+=`<tr style="font-weight:700;background:#f4f6fa"><td style='padding:5px 8px'>Totalt</td><td style='padding:5px 8px;text-align:right'>${tot.norm}</td><td style='padding:5px 8px;text-align:right'>${tot.ejf}</td><td style='padding:5px 8px;text-align:right'>${tot.veg}</td></tr></table>`;
           const t=document.createElement("div"); t.innerHTML=html; fbox.appendChild(t);
         });
+        const fl=document.createElement("a"); fl.textContent="⬇︎ Skriv ut / ladda ner (PDF)";
+        fl.href=URL.createObjectURL(buildFlaskPdf(sections)); fl.download="flask_rakning.pdf";
+        fl.style.cssText="display:inline-block;margin-top:12px;background:#132038;color:#fff;text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:600;font-size:15px";
+        fbox.appendChild(fl);
         fbox.style.display="block"; fbtn.textContent="Dölj fläsk-räkning";
       } else { fbox.style.display="none"; fbtn.textContent="Visa fläsk-räkning per avdelning"; }
     });
