@@ -248,7 +248,7 @@ function buildFlaskPdf(sections){
   sections.forEach(sec=>{
     const {rows,tot}=flaskPerWard(sec);
     doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.text(sec.facility,14,y); y+=2;
-    autoTable(doc,{startY:y, head:[["Avdelning","Normalkost","Ej fläsk","Veg"]],
+    doc.autoTable({startY:y, head:[["Avdelning","Normalkost","Ej fläsk","Veg"]],
       body:[...rows.map(r=>[r.ward,String(r.norm),String(r.ejf),String(r.veg)]), ["Totalt",String(tot.norm),String(tot.ejf),String(tot.veg)]],
       theme:"grid", styles:{fontSize:10,cellPadding:1.6}, headStyles:{fillColor:[238,238,238],textColor:20},
       columnStyles:{0:{cellWidth:45},1:{halign:"right"},2:{halign:"right"},3:{halign:"right"}},
