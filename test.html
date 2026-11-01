@@ -259,6 +259,79 @@ function buildFlaskPdf(sections){
   });
   return doc.output("blob");
 }
+/* ---------- Portionering per avdelning ---------- */
+function parseAdj(text){
+  const map={};
+  (text||"").split(/[\n,;]+/).forEach(line=>{
+    line=line.trim(); if(!line) return;
+    let m=line.match(/^([0-9A-Za-zÅÄÖåäö\/]+)\s*=\s*(\d+)$/);
+    if(m){ map[m[1].toUpperCase()]={type:"fixed",val:+m[2]}; return; }
+    m=line.match(/^([0-9A-Za-zÅÄÖåäö\/]+)\s*([+-])\s*(\d+)$/);
+    if(m){ map[m[1].toUpperCase()]={type:"delta",val:(m[2]==="-"?-1:1)*(+m[3])}; }
+  });
+  return map;
+}
+function portionWards(sections, adjMap){
+  const tot={};
+  sections.forEach(s=>(s.summary||[]).forEach(r=>{
+    const lab=(r[0]||"").trim(); if(!lab||lab==="Totalt") return;
+    const key=(lab==="72RO"||lab==="H72I")?"H72RO/H72I":lab;
+    tot[key]=(tot[key]||0)+(parseInt(r[1])||0)+(parseInt(r[2])||0);
+  }));
+  const paxOf=lab=>{ const base=tot[lab]||0, a=adjMap[lab.toUpperCase()];
+    if(a) return {pax:a.type==="fixed"?a.val:base+a.val, adj:true};
+    return {pax:base, adj:false}; };
+  const out=[], has22=("H22" in tot), has72=("H72RO/H72I" in tot);
+  if(has22){ const x=paxOf("H22"); out.push({label:"H22",pax:x.pax,adj:x.adj}); }
+  if(has72){ const x=paxOf("H72RO/H72I"); out.push({label:"H72RO/H72I",pax:x.pax,adj:x.adj}); }
+  if(has22&&has72){ out.push({label:"Summa 22+72",pax:paxOf("H22").pax+paxOf("H72RO/H72I").pax,subtotal:true}); }
+  Object.keys(tot).filter(k=>k!=="H22"&&k!=="H72RO/H72I").sort((a,b)=>a.localeCompare(b,"sv")).forEach(k=>{
+    const x=paxOf(k); out.push({label:k,pax:x.pax,adj:x.adj});
+  });
+  return out;
+}
+function nfmt(v){ return v.toLocaleString("sv-SE",{minimumFractionDigits:3,maximumFractionDigits:3}); }
+function buildPortionPdf(sections, adjMap, meals, extra, datum){
+  const rows=portionWards(sections, adjMap);
+  const r22=rows.find(z=>z.label==="H22"), r72=rows.find(z=>z.label==="H72RO/H72I");
+  const doc=new jsPDF({unit:"mm",format:"a4"});
+  doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.setTextColor(0);
+  doc.text("Portionering per avdelning",15,14);
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(90);
+  doc.text(`${datum||""} · +${extra} portioner/avd · * = justerad pax`,15,19); doc.setTextColor(0);
+  const nM=meals.length;
+  let rh=Math.min(5.2, 258/(nM*(rows.length+3)+(nM-1)*2)); rh=Math.max(rh,3.2);
+  const fs=Math.min(11, Math.max(8, rh*2));
+  const amt=(pax,per,unit)=>(pax+extra)*per/(unit==="g"?1000:10);
+  const uL=unit=>unit==="g"?"kg":"l";
+  let y=26;
+  meals.forEach(meal=>{
+    doc.setFont("helvetica","bold"); doc.setFontSize(fs+1.5);
+    doc.text(`${meal.title} — ${meal.amount} ${meal.unit}/pers`,15,y); y+=rh+1;
+    doc.setFont("helvetica","bold"); doc.setFontSize(fs);
+    doc.text("Avd",15,y); doc.text("Pax",48,y); doc.text("Mängd",68,y);
+    doc.setDrawColor(150); doc.setLineWidth(0.4); doc.line(15,y+1.2,120,y+1.2); y+=rh+0.6;
+    let tKg=0,tPax=0;
+    rows.forEach(r=>{
+      if(r.subtotal){
+        const q=amt(r22.pax,meal.amount,meal.unit)+amt(r72.pax,meal.amount,meal.unit);
+        doc.setTextColor(20,110,70); doc.setFont("helvetica","bold"); doc.setFontSize(fs);
+        doc.text("Summa 22+72",17,y); doc.text(String(r.pax),48,y); doc.text(`${nfmt(q)} ${uL(meal.unit)}`,68,y);
+        doc.setTextColor(0); y+=rh+0.6; return;
+      }
+      const q=amt(r.pax,meal.amount,meal.unit); tKg+=q; tPax+=r.pax;
+      doc.setFont("helvetica","bold"); doc.setFontSize(fs); doc.text(r.label,15,y);
+      doc.setFont("helvetica","normal"); doc.text(String(r.pax)+(r.adj?"*":""),48,y);
+      doc.setFont("helvetica","bold"); doc.text(`${nfmt(q)} ${uL(meal.unit)}`,68,y);
+      y+=rh;
+    });
+    doc.setDrawColor(150); doc.line(15,y+0.8,120,y+0.8);
+    doc.setFont("helvetica","bold"); doc.setFontSize(fs);
+    doc.text("Totalt",15,y+rh); doc.text(String(tPax),48,y+rh); doc.text(`${nfmt(tKg)} ${uL(meal.unit)}`,68,y+rh);
+    y+=rh*2+4;
+  });
+  return doc.output("blob");
+}
 function summaCounts(people){
   /* rev: sf-vn-2026 */
   const c={}; const extras=[];
@@ -464,6 +537,44 @@ go.addEventListener("click", async ()=>{
       } else { fbox.style.display="none"; fbtn.textContent="Visa fläsk-räkning per avdelning"; }
     });
     card.appendChild(fbtn); card.appendChild(fbox);
+
+    // --- Portionering per avdelning ---
+    const pwrap=document.createElement("div"); pwrap.style.cssText="margin-top:16px;border-top:1px solid #e3e6ec;padding-top:14px";
+    pwrap.innerHTML=`<div style="font-weight:700;margin-bottom:8px">Portionering (väg/skopa)</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:14px">
+        <label>Lunch <input id="luA" type="number" step="any" style="width:70px;padding:6px;border:1px solid #d7dce4;border-radius:6px">
+        <select id="luU" style="padding:6px;border:1px solid #d7dce4;border-radius:6px"><option value="g">g</option><option value="dl">dl</option></select>/pers</label>
+        <label>Middag <input id="miA" type="number" step="any" style="width:70px;padding:6px;border:1px solid #d7dce4;border-radius:6px">
+        <select id="miU" style="padding:6px;border:1px solid #d7dce4;border-radius:6px"><option value="g">g</option><option value="dl">dl</option></select>/pers</label>
+        <label>Extra/avd <input id="exN" type="number" value="2" style="width:56px;padding:6px;border:1px solid #d7dce4;border-radius:6px"></label>
+      </div>
+      <div style="margin-top:8px;font-size:14px">Justeringar pax (en per rad, t.ex. <b>H23=27</b> eller <b>H94+10</b>):<br>
+        <textarea id="adjT" rows="3" style="width:100%;margin-top:4px;padding:6px;border:1px solid #d7dce4;border-radius:6px;font-family:monospace"></textarea></div>`;
+    const pbtn=document.createElement("button"); pbtn.textContent="⬇︎ Skriv ut portionering (PDF)";
+    pbtn.style.cssText="margin-top:10px;width:100%;background:#132038;color:#fff;border:0;border-radius:10px;padding:12px;font-size:15px;font-weight:600;cursor:pointer";
+    const pout=document.createElement("div"); pout.style.marginTop="8px";
+    try{ const sv=JSON.parse(localStorage.getItem("portion")||"{}");
+      if(sv.luA)pwrap.querySelector("#luA").value=sv.luA; if(sv.luU)pwrap.querySelector("#luU").value=sv.luU;
+      if(sv.miA)pwrap.querySelector("#miA").value=sv.miA; if(sv.miU)pwrap.querySelector("#miU").value=sv.miU;
+      if(sv.exN!=null&&sv.exN!=="")pwrap.querySelector("#exN").value=sv.exN; if(sv.adjT)pwrap.querySelector("#adjT").value=sv.adjT;
+    }catch(e){}
+    pbtn.addEventListener("click",()=>{
+      const luA=parseFloat(pwrap.querySelector("#luA").value), luU=pwrap.querySelector("#luU").value;
+      const miA=parseFloat(pwrap.querySelector("#miA").value), miU=pwrap.querySelector("#miU").value;
+      const extra=parseInt(pwrap.querySelector("#exN").value)||0;
+      const adjT=pwrap.querySelector("#adjT").value;
+      try{ localStorage.setItem("portion", JSON.stringify({luA:pwrap.querySelector("#luA").value,luU,miA:pwrap.querySelector("#miA").value,miU,exN:pwrap.querySelector("#exN").value,adjT})); }catch(e){}
+      const meals=[];
+      if(luA>0) meals.push({title:"LUNCH",amount:luA,unit:luU});
+      if(miA>0) meals.push({title:"MIDDAG",amount:miA,unit:miU});
+      if(!meals.length){ pout.innerHTML='<div style="color:#c62828;font-size:14px">Skriv minst en mängd (Lunch eller Middag).</div>'; return; }
+      const datum=(sections.find(s=>s.datum)||{}).datum||"";
+      const url=URL.createObjectURL(buildPortionPdf(sections, parseAdj(adjT), meals, extra, datum));
+      pout.innerHTML=""; const a=document.createElement("a"); a.href=url; a.download="portionering.pdf"; a.textContent="⬇︎ Öppna / skriv ut portionering";
+      a.style.cssText="display:inline-block;background:#1f7a3d;color:#fff;text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:600;font-size:15px"; pout.appendChild(a);
+    });
+    pwrap.appendChild(pbtn); pwrap.appendChild(pout); card.appendChild(pwrap);
+
     out.appendChild(card);
   }catch(err){
     const e=document.createElement("div"); e.className="err"; e.textContent="Fel: "+(err&&err.message?err.message:err); out.appendChild(e);
