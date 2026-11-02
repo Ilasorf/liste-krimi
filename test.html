@@ -260,16 +260,18 @@ function buildFlaskPdf(sections){
   return doc.output("blob");
 }
 /* ---------- Portionering per avdelning ---------- */
+function normW(x){ return (x||"").toString().toUpperCase().replace(/\s+/g,"").replace(/^H/,""); }
 function parseAdj(text){
-  const map={};
-  (text||"").split(/[\n,;]+/).forEach(line=>{
-    line=line.trim(); if(!line) return;
-    let m=line.match(/^([0-9A-Za-zÅÄÖåäö\/]+)\s*=\s*(\d+)$/);
-    if(m){ map[m[1].toUpperCase()]={type:"fixed",val:+m[2]}; return; }
-    m=line.match(/^([0-9A-Za-zÅÄÖåäö\/]+)\s*([+-])\s*(\d+)$/);
-    if(m){ map[m[1].toUpperCase()]={type:"delta",val:(m[2]==="-"?-1:1)*(+m[3])}; }
+  const map={}, applied=[], bad=[];
+  (text||"").split(/[\n;,]+/).forEach(raw=>{
+    const line=raw.replace(/[:]/g," ").trim(); if(!line) return;
+    let m=line.match(/([Hh]?\s*\d+[A-Za-zÅÄÖåäö]*)\s*=\s*(\d+)/);
+    if(m){ const k=normW(m[1]); map[k]={type:"fixed",val:+m[2]}; applied.push("H"+k+" = "+m[2]); return; }
+    m=line.match(/([Hh]?\s*\d+[A-Za-zÅÄÖåäö]*)\s*([+-])\s*(\d+)/);
+    if(m){ const k=normW(m[1]), d=(m[2]==="-"?-1:1)*(+m[3]); map[k]={type:"delta",val:d}; applied.push("H"+k+" "+(d<0?"":"+")+d); return; }
+    bad.push(line);
   });
-  return map;
+  return {map, applied, bad};
 }
 function portionWards(sections, adjMap){
   const tot={};
@@ -278,7 +280,7 @@ function portionWards(sections, adjMap){
     const key=(lab==="72RO"||lab==="H72I")?"H72RO/H72I":lab;
     tot[key]=(tot[key]||0)+(parseInt(r[1])||0)+(parseInt(r[2])||0);
   }));
-  const paxOf=lab=>{ const base=tot[lab]||0, a=adjMap[lab.toUpperCase()];
+  const paxOf=lab=>{ const base=tot[lab]||0, a=adjMap[normW(lab)];
     if(a) return {pax:a.type==="fixed"?a.val:base+a.val, adj:true};
     return {pax:base, adj:false}; };
   const out=[], has22=("H22" in tot), has72=("H72RO/H72I" in tot);
@@ -325,6 +327,12 @@ function buildPortionPdf(sections, adjMap, meals, extra, datum){
       doc.setFont("helvetica","bold"); doc.text(`${nfmt(q)} ${uL(meal.unit)}`,68,y);
       y+=rh;
     });
+    if(meal.matsalen>0){
+      doc.setFont("helvetica","bold"); doc.setFontSize(fs); doc.text("Matsalen",15,y);
+      doc.setFont("helvetica","normal"); doc.text("—",48,y);
+      doc.setFont("helvetica","bold"); doc.text(`${nfmt(meal.matsalen)} ${uL(meal.unit)}`,68,y);
+      tKg+=meal.matsalen; y+=rh;
+    }
     doc.setDrawColor(150); doc.line(15,y+0.8,120,y+0.8);
     doc.setFont("helvetica","bold"); doc.setFontSize(fs);
     doc.text("Totalt",15,y+rh); doc.text(String(tPax),48,y+rh); doc.text(`${nfmt(tKg)} ${uL(meal.unit)}`,68,y+rh);
@@ -547,6 +555,7 @@ go.addEventListener("click", async ()=>{
         <label>Middag <input id="miA" type="number" step="any" style="width:70px;padding:6px;border:1px solid #d7dce4;border-radius:6px">
         <select id="miU" style="padding:6px;border:1px solid #d7dce4;border-radius:6px"><option value="g">g</option><option value="dl">dl</option></select>/pers</label>
         <label>Extra/avd <input id="exN" type="number" value="2" style="width:56px;padding:6px;border:1px solid #d7dce4;border-radius:6px"></label>
+        <label>Matsalen (lunch) <input id="msA" type="number" step="any" style="width:70px;padding:6px;border:1px solid #d7dce4;border-radius:6px"> <span style="color:#777">l/kg som lunch</span></label>
       </div>
       <div style="margin-top:8px;font-size:14px">Justeringar pax (en per rad, t.ex. <b>H23=27</b> eller <b>H94+10</b>):<br>
         <textarea id="adjT" rows="3" style="width:100%;margin-top:4px;padding:6px;border:1px solid #d7dce4;border-radius:6px;font-family:monospace"></textarea></div>`;
@@ -557,21 +566,26 @@ go.addEventListener("click", async ()=>{
       if(sv.luA)pwrap.querySelector("#luA").value=sv.luA; if(sv.luU)pwrap.querySelector("#luU").value=sv.luU;
       if(sv.miA)pwrap.querySelector("#miA").value=sv.miA; if(sv.miU)pwrap.querySelector("#miU").value=sv.miU;
       if(sv.exN!=null&&sv.exN!=="")pwrap.querySelector("#exN").value=sv.exN; if(sv.adjT)pwrap.querySelector("#adjT").value=sv.adjT;
+      if(sv.msA)pwrap.querySelector("#msA").value=sv.msA;
     }catch(e){}
     pbtn.addEventListener("click",()=>{
       const luA=parseFloat(pwrap.querySelector("#luA").value), luU=pwrap.querySelector("#luU").value;
       const miA=parseFloat(pwrap.querySelector("#miA").value), miU=pwrap.querySelector("#miU").value;
       const extra=parseInt(pwrap.querySelector("#exN").value)||0;
+      const matsalen=parseFloat(pwrap.querySelector("#msA").value)||0;
       const adjT=pwrap.querySelector("#adjT").value;
-      try{ localStorage.setItem("portion", JSON.stringify({luA:pwrap.querySelector("#luA").value,luU,miA:pwrap.querySelector("#miA").value,miU,exN:pwrap.querySelector("#exN").value,adjT})); }catch(e){}
+      try{ localStorage.setItem("portion", JSON.stringify({luA:pwrap.querySelector("#luA").value,luU,miA:pwrap.querySelector("#miA").value,miU,exN:pwrap.querySelector("#exN").value,msA:pwrap.querySelector("#msA").value,adjT})); }catch(e){}
       const meals=[];
-      if(luA>0) meals.push({title:"LUNCH",amount:luA,unit:luU});
+      if(luA>0) meals.push({title:"LUNCH",amount:luA,unit:luU,matsalen});
       if(miA>0) meals.push({title:"MIDDAG",amount:miA,unit:miU});
       if(!meals.length){ pout.innerHTML='<div style="color:#c62828;font-size:14px">Skriv minst en mängd (Lunch eller Middag).</div>'; return; }
       const datum=(sections.find(s=>s.datum)||{}).datum||"";
-      const url=URL.createObjectURL(buildPortionPdf(sections, parseAdj(adjT), meals, extra, datum));
+      const pa=parseAdj(adjT);
+      const url=URL.createObjectURL(buildPortionPdf(sections, pa.map, meals, extra, datum));
       pout.innerHTML=""; const a=document.createElement("a"); a.href=url; a.download="portionering.pdf"; a.textContent="⬇︎ Öppna / skriv ut portionering";
       a.style.cssText="display:inline-block;background:#1f7a3d;color:#fff;text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:600;font-size:15px"; pout.appendChild(a);
+      if(pa.applied.length){ const d=document.createElement("div"); d.style.cssText="color:#1f7a3d;font-size:13px;margin-top:8px"; d.textContent="Justeringar tillämpade: "+pa.applied.join(", "); pout.appendChild(d); }
+      if(pa.bad.length){ const d=document.createElement("div"); d.style.cssText="color:#c62828;font-size:13px;margin-top:4px"; d.textContent="⚠ Ej förstådda rader (ignorerade): "+pa.bad.join("  |  "); pout.appendChild(d); }
     });
     pwrap.appendChild(pbtn); pwrap.appendChild(pout); card.appendChild(pwrap);
 
