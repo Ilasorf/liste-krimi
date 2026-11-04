@@ -277,65 +277,71 @@ function portionWards(sections, adjMap){
   const tot={};
   sections.forEach(s=>(s.summary||[]).forEach(r=>{
     const lab=(r[0]||"").trim(); if(!lab||lab==="Totalt") return;
-    const key=(lab==="72RO"||lab==="H72I")?"H72RO/H72I":lab;
+    let key=lab;
+    if(lab==="72RO"||lab==="H72I") key="H72RO/H72I";
+    else if(lab==="H22"||lab==="H22I") key="H22/H22I";
     tot[key]=(tot[key]||0)+(parseInt(r[1])||0)+(parseInt(r[2])||0);
   }));
   const paxOf=lab=>{ const base=tot[lab]||0, a=adjMap[normW(lab)];
     if(a) return {pax:a.type==="fixed"?a.val:base+a.val, adj:true};
     return {pax:base, adj:false}; };
-  const out=[], has22=("H22" in tot), has72=("H72RO/H72I" in tot);
-  if(has22){ const x=paxOf("H22"); out.push({label:"H22",pax:x.pax,adj:x.adj}); }
-  if(has72){ const x=paxOf("H72RO/H72I"); out.push({label:"H72RO/H72I",pax:x.pax,adj:x.adj}); }
-  if(has22&&has72){ out.push({label:"Summa 22+72",pax:paxOf("H22").pax+paxOf("H72RO/H72I").pax,subtotal:true}); }
-  Object.keys(tot).filter(k=>k!=="H22"&&k!=="H72RO/H72I").sort((a,b)=>a.localeCompare(b,"sv")).forEach(k=>{
-    const x=paxOf(k); out.push({label:k,pax:x.pax,adj:x.adj});
-  });
+  const out=[];
+  const GROUP=["H22/H22I","H72RO/H72I"].filter(g=>g in tot);
+  GROUP.forEach(g=>{ const x=paxOf(g); out.push({label:g,pax:x.pax,adj:x.adj}); });
+  if(GROUP.length>=2){ out.push({label:"Summa 22+72",pax:GROUP.reduce((a,g)=>a+paxOf(g).pax,0),subtotal:true}); }
+  const others=Object.keys(tot).filter(k=>!["H22/H22I","H72RO/H72I"].includes(k));
+  const isH=k=>/^H\d/.test(k);
+  const mid=others.filter(isH).sort((a,b)=>a.localeCompare(b,"sv"));
+  const bot=others.filter(k=>!isH(k)).sort((a,b)=>a.localeCompare(b,"sv"));   // 12B2, 12C2... i fondo
+  [...mid,...bot].forEach(k=>{ const x=paxOf(k); out.push({label:k,pax:x.pax,adj:x.adj}); });
   return out;
 }
 function nfmt(v){ return v.toLocaleString("sv-SE",{minimumFractionDigits:3,maximumFractionDigits:3}); }
 function buildPortionPdf(sections, adjMap, meals, extra, datum){
   const rows=portionWards(sections, adjMap);
-  const r22=rows.find(z=>z.label==="H22"), r72=rows.find(z=>z.label==="H72RO/H72I");
+  const r22=rows.find(z=>z.label==="H22/H22I"), r72=rows.find(z=>z.label==="H72RO/H72I");
   const doc=new jsPDF({unit:"mm",format:"a4"});
   doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.setTextColor(0);
   doc.text("Portionering per avdelning",15,14);
   doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(90);
-  doc.text(`${datum||""} · +${extra} portioner/avd · * = justerad pax`,15,19); doc.setTextColor(0);
+  doc.text(`${datum||""} · Port. = pax + ${extra} extra · * = justerad pax`,15,19); doc.setTextColor(0);
   const nM=meals.length;
   let rh=Math.min(5.2, 258/(nM*(rows.length+3)+(nM-1)*2)); rh=Math.max(rh,3.2);
   const fs=Math.min(11, Math.max(8, rh*2));
   const amt=(pax,per,unit)=>(pax+extra)*per/(unit==="g"?1000:10);
   const uL=unit=>unit==="g"?"kg":"l";
+  const X={avd:15,pax:52,port:68,mangd:86}, lineEnd=128;
   let y=26;
   meals.forEach(meal=>{
     doc.setFont("helvetica","bold"); doc.setFontSize(fs+1.5);
     doc.text(`${meal.title} — ${meal.amount} ${meal.unit}/pers`,15,y); y+=rh+1;
     doc.setFont("helvetica","bold"); doc.setFontSize(fs);
-    doc.text("Avd",15,y); doc.text("Pax",48,y); doc.text("Mängd",68,y);
-    doc.setDrawColor(150); doc.setLineWidth(0.4); doc.line(15,y+1.2,120,y+1.2); y+=rh+0.6;
-    let tKg=0,tPax=0;
+    doc.text("Avd",X.avd,y); doc.text("Pax",X.pax,y); doc.text("Port.",X.port,y); doc.text("Mängd",X.mangd,y);
+    doc.setDrawColor(150); doc.setLineWidth(0.4); doc.line(15,y+1.2,lineEnd,y+1.2); y+=rh+0.6;
+    let tKg=0,tPax=0,tPort=0;
     rows.forEach(r=>{
       if(r.subtotal){
         const q=amt(r22.pax,meal.amount,meal.unit)+amt(r72.pax,meal.amount,meal.unit);
+        const po=(r22.pax+extra)+(r72.pax+extra);
         doc.setTextColor(20,110,70); doc.setFont("helvetica","bold"); doc.setFontSize(fs);
-        doc.text("Summa 22+72",17,y); doc.text(String(r.pax),48,y); doc.text(`${nfmt(q)} ${uL(meal.unit)}`,68,y);
+        doc.text("Summa 22+72",17,y); doc.text(String(r.pax),X.pax,y); doc.text(String(po),X.port,y); doc.text(`${nfmt(q)} ${uL(meal.unit)}`,X.mangd,y);
         doc.setTextColor(0); y+=rh+0.6; return;
       }
-      const q=amt(r.pax,meal.amount,meal.unit); tKg+=q; tPax+=r.pax;
-      doc.setFont("helvetica","bold"); doc.setFontSize(fs); doc.text(r.label,15,y);
-      doc.setFont("helvetica","normal"); doc.text(String(r.pax)+(r.adj?"*":""),48,y);
-      doc.setFont("helvetica","bold"); doc.text(`${nfmt(q)} ${uL(meal.unit)}`,68,y);
+      const po=r.pax+extra, q=amt(r.pax,meal.amount,meal.unit); tKg+=q; tPax+=r.pax; tPort+=po;
+      doc.setFont("helvetica","bold"); doc.setFontSize(fs); doc.text(r.label,X.avd,y);
+      doc.setFont("helvetica","normal"); doc.text(String(r.pax)+(r.adj?"*":""),X.pax,y); doc.text(String(po),X.port,y);
+      doc.setFont("helvetica","bold"); doc.text(`${nfmt(q)} ${uL(meal.unit)}`,X.mangd,y);
       y+=rh;
     });
     if(meal.matsalen>0){
-      doc.setFont("helvetica","bold"); doc.setFontSize(fs); doc.text("Matsalen",15,y);
-      doc.setFont("helvetica","normal"); doc.text("—",48,y);
-      doc.setFont("helvetica","bold"); doc.text(`${nfmt(meal.matsalen)} ${uL(meal.unit)}`,68,y);
+      doc.setFont("helvetica","bold"); doc.setFontSize(fs); doc.text("Matsalen",X.avd,y);
+      doc.setFont("helvetica","normal"); doc.text("—",X.pax,y); doc.text("—",X.port,y);
+      doc.setFont("helvetica","bold"); doc.text(`${nfmt(meal.matsalen)} ${uL(meal.unit)}`,X.mangd,y);
       tKg+=meal.matsalen; y+=rh;
     }
-    doc.setDrawColor(150); doc.line(15,y+0.8,120,y+0.8);
+    doc.setDrawColor(150); doc.line(15,y+0.8,lineEnd,y+0.8);
     doc.setFont("helvetica","bold"); doc.setFontSize(fs);
-    doc.text("Totalt",15,y+rh); doc.text(String(tPax),48,y+rh); doc.text(`${nfmt(tKg)} ${uL(meal.unit)}`,68,y+rh);
+    doc.text("Totalt",X.avd,y+rh); doc.text(String(tPax),X.pax,y+rh); doc.text(String(tPort),X.port,y+rh); doc.text(`${nfmt(tKg)} ${uL(meal.unit)}`,X.mangd,y+rh);
     y+=rh*2+4;
   });
   return doc.output("blob");
