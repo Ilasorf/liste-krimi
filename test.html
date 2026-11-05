@@ -41,7 +41,7 @@
 </head>
 <body data-build="sfvn-2026-ilasorf">
 <div class="wrap">
-  <h1>Matlistor <span style="background:#ffd24d;color:#000;font-size:12px;padding:2px 8px;border-radius:6px;vertical-align:middle">TEST</span></h1>
+  <h1>Matlistor <span style="background:#ffd24d;color:#000;font-size:12px;padding:2px 8px;border-radius:6px;vertical-align:middle">TEST</span> <span style="background:#1f7a3d;color:#fff;font-size:12px;padding:2px 8px;border-radius:6px;vertical-align:middle">v1.4 · 2026-11-05</span></h1>
   <p class="sub">Ladda upp PDF-listorna (Matbeställningslista). Appen tar bort <b>Ej Fläsk, Ramadan, Ungdom, Nötter, Mandel, Laktos, Ej Blodmat</b> (de fyra sista endast när de står ensamma) och skapar <b>rensad lista</b> + <b>etiketter</b>, med avstämning av totalerna.</p>
   <div class="privacy">🔒 PDF-filerna laddas <b>inte upp någonstans</b>: allt sker här i webbläsaren, uppgifterna lämnar aldrig den här datorn.</div>
 
@@ -304,7 +304,7 @@ function buildPortionPdf(sections, adjMap, meals, extra, datum){
   doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.setTextColor(0);
   doc.text("Portionering per avdelning",15,14);
   doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(90);
-  doc.text(`${datum||""} · Port. = pax + ${extra} extra · * = justerad pax`,15,19); doc.setTextColor(0);
+  doc.text(`${datum||""} · Port. = pax + ${extra} extra · * = justerad pax · v1.4`,15,19); doc.setTextColor(0);
   const nM=meals.length;
   let rh=Math.min(5.2, 258/(nM*(rows.length+3)+(nM-1)*2)); rh=Math.max(rh,3.2);
   const fs=Math.min(11, Math.max(8, rh*2));
