@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="author" content="Simone Frosali">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Matlistor — rensning & etiketter</title>
+<title>Matlistor — rensning, etiketter & portionering</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
@@ -42,7 +42,7 @@
 <body data-build="sfvn-2026-ilasorf">
 <div class="wrap">
   <h1>Matlistor</h1>
-  <p class="sub">Ladda upp PDF-listorna (Matbeställningslista). Appen tar bort <b>Ej Fläsk, Ramadan, Ungdom, Nötter, Mandel, Laktos, Ej Blodmat</b> (de fyra sista endast när de står ensamma) och skapar <b>rensad lista</b> + <b>etiketter</b>, med avstämning av totalerna.</p>
+  <p class="sub">Ladda upp PDF-listorna (Matbeställningslista). Appen tar bort <b>Ej Fläsk, Ramadan, Ungdom, Nötter, Mandel, Laktos, Ej Blodmat</b> (de fyra sista endast när de står ensamma) och skapar <b>rensad lista</b> + <b>etiketter</b>, med avstämning av totalerna. Dessutom <b>fläsk-räkning</b> och <b>portionering</b> per avdelning.</p>
   <div class="privacy">🔒 PDF-filerna laddas <b>inte upp någonstans</b>: allt sker här i webbläsaren, uppgifterna lämnar aldrig den här datorn.</div>
 
   <div id="drop">
@@ -60,7 +60,7 @@
     Regler: “Ej Fläsk”, “Ramadan” och “Ungdom” tas alltid bort. Nötter/Mandel/Laktos/Ej Blodmat tas bort endast när de står ensamma; annars behålls raden (Nötter/Mandel markeras för kontroll). Allergener och korta Annat-livsmedel får “-” framför; instruktioner (t.ex. Diabetes, Hjärtproblem) förblir text.<br>
     Säkerhet: rader raderas aldrig. Varje enhet visar <i>Angivet = Lästa</i>: stämmer det inte, kontrollera manuellt.
   </p>
-  <p style="text-align:center;color:#9aa3b0;font-size:12px;margin-top:20px">Powered by <b>Simone Frosali</b> · 2026 · Västervik Norra Köket</p>
+  <p style="text-align:center;color:#9aa3b0;font-size:12px;margin-top:20px">Powered by <b>Simone Frosali</b> · 2026 · Västervik Norra Köket · <span style="color:#c3cad6">v 2026-11-07</span></p>
 </div>
 
 <script>
@@ -105,8 +105,10 @@ async function parsePdf(buf){
         // vänster kolumn = Inskrivningsnr + Avdelning (+ ev. namn som IGNORERAS)
         const leftText = sorted.filter(o=>o.x<boundary).map(o=>o.str).join(" ");
         const im = leftText.match(/(\d{4}\/\d+)/);
-        const am = leftText.match(/([A-Za-zÅÄÖåäö0-9]+\/\d+:\d+)/);
-        cur = {insk: im?im[1]:"", avd: am?am[1]:"", spec: rightText};  // namn läses aldrig
+        // pdf.js kan dela upp avd i flera text-item ("12C2/12C2", "-", "11:1") → mellanslag i raden.
+        // Tillåt mellanslag i matchningen och ta bort dem efteråt.
+        const am = leftText.match(/([A-Za-zÅÄÖåäö0-9]+\s*\/\s*[A-Za-zÅÄÖåäö0-9\s\-]*?:\s*\d+)/);
+        cur = {insk: im?im[1]:"", avd: am?am[1].replace(/\s+/g,""):"", spec: rightText};  // namn läses aldrig
         people.push(cur); seenPerson=true;
         continue;
       }
@@ -227,6 +229,135 @@ function analyzePerson(spec){
   }
   return {counted, noteText};
 }
+function flaskPerWard(section){
+  const norm={}; (section.summary||[]).forEach(r=>{ const lab=(r[0]||"").trim(); if(lab && lab!=="Totalt") norm[lab]=parseInt(r[1])||0; });
+  const ejf={}, veg={}, wards=new Set(Object.keys(norm));
+  (section.raw||[]).forEach(p=>{ const w=(p.avd||"").split("/")[0].trim(); if(!w) return; wards.add(w);
+    if(/Ej\s+Fläsk/i.test(p.spec||"")) ejf[w]=(ejf[w]||0)+1;
+    if(/Vegetarisk/i.test(p.spec||"")) veg[w]=(veg[w]||0)+1;
+  });
+  const rows=[...wards].sort((a,b)=>a.localeCompare(b,"sv")).map(w=>({ward:w, norm:norm[w]||0, ejf:ejf[w]||0, veg:veg[w]||0}));
+  const tot={ward:"Totalt", norm:0, ejf:0, veg:0};
+  rows.forEach(r=>{tot.norm+=r.norm; tot.ejf+=r.ejf; tot.veg+=r.veg;});
+  return {rows, tot};
+}
+function buildFlaskPdf(sections){
+  const doc=new jsPDF({unit:"mm",format:"a4"});
+  doc.setFont("helvetica","bold"); doc.setFontSize(15); doc.text("Fläsk-räkning per avdelning",105,15,{align:"center"});
+  const datum=(sections.find(s=>s.datum)||{}).datum||"";
+  if(datum){ doc.setFont("helvetica","normal"); doc.setFontSize(11); doc.setTextColor(90); doc.text(datum,105,21,{align:"center"}); doc.setTextColor(0); }
+  let y=28;
+  sections.forEach(sec=>{
+    const {rows,tot}=flaskPerWard(sec);
+    doc.setFont("helvetica","bold"); doc.setFontSize(11); doc.text(sec.facility,14,y); y+=2;
+    doc.autoTable({startY:y, head:[["Avdelning","Normalkost","Ej fläsk","Veg"]],
+      body:[...rows.map(r=>[r.ward,String(r.norm),String(r.ejf),String(r.veg)]), ["Totalt",String(tot.norm),String(tot.ejf),String(tot.veg)]],
+      theme:"grid", styles:{fontSize:10,cellPadding:1.6}, headStyles:{fillColor:[238,238,238],textColor:20},
+      columnStyles:{0:{cellWidth:45},1:{halign:"right"},2:{halign:"right"},3:{halign:"right"}},
+      margin:{left:14,right:14},
+      didParseCell:d=>{ if(d.section==="body" && d.row.index===rows.length){ d.cell.styles.fontStyle="bold"; d.cell.styles.fillColor=[244,246,250]; } }
+    });
+    y=doc.lastAutoTable.finalY+8;
+  });
+  return doc.output("blob");
+}
+/* ---------- Portionering per avdelning ---------- */
+function normW(x){ return (x||"").toString().toUpperCase().replace(/\s+/g,"").replace(/^H/,""); }
+function parseAdj(text){
+  const map={}, applied=[], bad=[];
+  // Dela på rad/; /, för att kunna flagga obegripliga delar, men leta ALLA justeringar
+  // i varje del (global match) så flera på samma rad med mellanslag också fungerar:
+  // "h23=27 h94+10 h95+10" → alla tre, inte bara första.
+  (text||"").split(/[\n;,]+/).forEach(raw=>{
+    const line=raw.replace(/[:]/g," ").trim(); if(!line) return;
+    const RX=/([Hh]?\s*\d+[A-Za-zÅÄÖåäö]*\d*)\s*(=|\+|-)\s*(\d+)/g;
+    let m, found=false;
+    while((m=RX.exec(line))){
+      found=true;
+      const k=normW(m[1]), op=m[2], n=+m[3];
+      if(op==="="){ map[k]={type:"fixed",val:n}; applied.push("H"+k+" = "+n); }
+      else { const d=(op==="-"?-1:1)*n; map[k]={type:"delta",val:d}; applied.push("H"+k+" "+(d<0?"":"+")+d); }
+    }
+    if(!found) bad.push(line);
+  });
+  return {map, applied, bad};
+}
+function portionWards(sections, adjMap){
+  const tot={};
+  sections.forEach(s=>(s.summary||[]).forEach(r=>{
+    const lab=(r[0]||"").trim(); if(!lab||lab==="Totalt") return;
+    let key=lab;
+    if(lab==="72RO"||lab==="H72I") key="H72RO/H72I";
+    else if(lab==="H22"||lab==="H22I") key="H22/H22I";
+    tot[key]=(tot[key]||0)+(parseInt(r[1])||0)+(parseInt(r[2])||0);
+  }));
+  // fixed (=) => pax är redan den slutliga portionssiffran, extra läggs INTE till (t.ex. avd 23).
+  // delta (+/-) eller ingen justering => pax + extra som vanligt.
+  const paxOf=lab=>{ const base=tot[lab]||0, a=adjMap[normW(lab)];
+    if(a) return {pax:a.type==="fixed"?a.val:base+a.val, adj:true, fixed:a.type==="fixed"};
+    return {pax:base, adj:false, fixed:false}; };
+  const out=[];
+  const GROUP=["H22/H22I","H72RO/H72I"].filter(g=>g in tot);
+  GROUP.forEach(g=>{ const x=paxOf(g); out.push({label:g,pax:x.pax,adj:x.adj,fixed:x.fixed}); });
+  if(GROUP.length>=2){ out.push({label:"Summa 22+72",pax:GROUP.reduce((a,g)=>a+paxOf(g).pax,0),subtotal:true}); }
+  const others=Object.keys(tot).filter(k=>!["H22/H22I","H72RO/H72I"].includes(k));
+  const isH=k=>/^H\d/.test(k);
+  const mid=others.filter(isH).sort((a,b)=>a.localeCompare(b,"sv"));
+  const bot=others.filter(k=>!isH(k)).sort((a,b)=>a.localeCompare(b,"sv"));   // 12B2, 12C2... i fondo
+  [...mid,...bot].forEach(k=>{ const x=paxOf(k); out.push({label:k,pax:x.pax,adj:x.adj,fixed:x.fixed}); });
+  return out;
+}
+function nfmt(v){ return v.toLocaleString("sv-SE",{minimumFractionDigits:3,maximumFractionDigits:3}); }
+function buildPortionPdf(sections, adjMap, meals, extra, datum){
+  const rows=portionWards(sections, adjMap);
+  const r22=rows.find(z=>z.label==="H22/H22I"), r72=rows.find(z=>z.label==="H72RO/H72I");
+  const doc=new jsPDF({unit:"mm",format:"a4"});
+  doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.setTextColor(0);
+  doc.text("Portionering per avdelning",15,14);
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(90);
+  doc.text(`${datum||""} · Port. = pax + ${extra} extra (fast "=" får inga extra) · * = justerad pax · v 2026-11-07`,15,19); doc.setTextColor(0);
+  const nM=meals.length;
+  let rh=Math.min(5.2, 258/(nM*(rows.length+3)+(nM-1)*2)); rh=Math.max(rh,3.2);
+  const fs=Math.min(11, Math.max(8, rh*2));
+  const portOf=r=>r.fixed?r.pax:r.pax+extra;              // fast pax => inga extra
+  const amt=(port,per,unit)=>port*per/(unit==="g"?1000:10);
+  const uL=unit=>unit==="g"?"kg":"l";
+  const X={avd:15,pax:52,port:68,mangd:86}, lineEnd=128;
+  let y=26;
+  meals.forEach(meal=>{
+    doc.setFont("helvetica","bold"); doc.setFontSize(fs+1.5);
+    doc.text(`${meal.title} — ${meal.amount} ${meal.unit}/pers`,15,y); y+=rh+1;
+    doc.setFont("helvetica","bold"); doc.setFontSize(fs);
+    doc.text("Avd",X.avd,y); doc.text("Pax",X.pax,y); doc.text("Port.",X.port,y); doc.text("Mängd",X.mangd,y);
+    doc.setDrawColor(150); doc.setLineWidth(0.4); doc.line(15,y+1.2,lineEnd,y+1.2); y+=rh+0.6;
+    let tKg=0,tPax=0,tPort=0;
+    rows.forEach(r=>{
+      if(r.subtotal){
+        const po=portOf(r22)+portOf(r72);
+        const q=amt(portOf(r22),meal.amount,meal.unit)+amt(portOf(r72),meal.amount,meal.unit);
+        doc.setTextColor(20,110,70); doc.setFont("helvetica","bold"); doc.setFontSize(fs);
+        doc.text("Summa 22+72",17,y); doc.text(String(r.pax),X.pax,y); doc.text(String(po),X.port,y); doc.text(`${nfmt(q)} ${uL(meal.unit)}`,X.mangd,y);
+        doc.setTextColor(0); y+=rh+0.6; return;
+      }
+      const po=portOf(r), q=amt(po,meal.amount,meal.unit); tKg+=q; tPax+=r.pax; tPort+=po;
+      doc.setFont("helvetica","bold"); doc.setFontSize(fs); doc.text(r.label,X.avd,y);
+      doc.setFont("helvetica","normal"); doc.text(String(r.pax)+(r.adj?"*":""),X.pax,y); doc.text(String(po),X.port,y);
+      doc.setFont("helvetica","bold"); doc.text(`${nfmt(q)} ${uL(meal.unit)}`,X.mangd,y);
+      y+=rh;
+    });
+    if(meal.matsalen>0){
+      doc.setFont("helvetica","bold"); doc.setFontSize(fs); doc.text("Matsalen",X.avd,y);
+      doc.setFont("helvetica","normal"); doc.text("—",X.pax,y); doc.text("—",X.port,y);
+      doc.setFont("helvetica","bold"); doc.text(`${nfmt(meal.matsalen)} ${uL(meal.unit)}`,X.mangd,y);
+      tKg+=meal.matsalen; y+=rh;
+    }
+    doc.setDrawColor(150); doc.line(15,y+0.8,lineEnd,y+0.8);
+    doc.setFont("helvetica","bold"); doc.setFontSize(fs);
+    doc.text("Totalt",X.avd,y+rh); doc.text(String(tPax),X.pax,y+rh); doc.text(String(tPort),X.port,y+rh); doc.text(`${nfmt(tKg)} ${uL(meal.unit)}`,X.mangd,y+rh);
+    y+=rh*2+4;
+  });
+  return doc.output("blob");
+}
 function summaCounts(people){
   /* rev: sf-vn-2026 */
   const c={}; const extras=[];
@@ -343,9 +474,15 @@ function buildLabels(items, dx, dy){
     if(pos===0){ if(idx) doc.addPage(); grid(); }
     const col=pos%cols, row=Math.floor(pos/cols);
     const x=ml+col*labW+dx, y=mt+row*labH+dy;
-    // avdelning till vänster, centrerad i höjd
+    // avdelning till vänster, centrerad i höjd.
+    // avd med bokstäver (22I, 72RO, 12B2, 12C1, 12B1...) börjar 2 pt mindre för säker layout;
+    // rena 2-siffriga avd (22, 23, 42...) behåller full storlek. Krymp sedan ytterligare om det behövs.
     doc.setTextColor(0); doc.setFont("helvetica","bold");
-    doc.setFontSize(WARD); doc.text(it.ward||"", x+12, y+labH/2, {align:"center", baseline:"middle"});
+    const WARD_MAXW=16;
+    const special=/[A-Za-zÅÄÖåäö]/.test(it.ward||"");
+    let ws = special ? WARD-2 : WARD;
+    while(ws>8 && doc.getStringUnitWidth(it.ward||"")*ws*PT > WARD_MAXW){ ws-=1; }
+    doc.setFontSize(ws); doc.text(it.ward||"", x+12, y+labH/2, {align:"center", baseline:"middle"});
     // text + nummer centrerade i ytan till höger, väl inne från linjerna
     const cx = x + 45;
     doc.setFontSize(NUM); doc.text(it.num||"", cx, y+labH-BOTPAD, {align:"center"});
@@ -389,7 +526,7 @@ go.addEventListener("click", async ()=>{
       const emptied = cleaned.filter(p=>p.text==="").length;
       const review  = cleaned.filter(p=>p.flag==="review").length;
       const extracted = cleaned.length;
-      sections.push({facility:facility||f.name, declared, summary, people:cleaned, datum,
+      sections.push({facility:facility||f.name, declared, summary, people:cleaned, raw:people, datum,
                      extracted, emptied, review, remaining:extracted-emptied});
       cleaned.filter(p=>p.text!=="").forEach(p=>labelItems.push(
         {ward:wardOf(p.avd), type:shortType(p.text), num:shortNum(p.insk), flag:p.flag}));
@@ -407,7 +544,76 @@ go.addEventListener("click", async ()=>{
     const dl=document.createElement("div"); dl.className="dl";
     dl.innerHTML=`<a href="${listURL}" download="rensad_lista.pdf">⬇︎ Rensad lista</a>
                   <a href="${labURL}" download="etiketter.pdf">⬇︎ Etiketter (${labelItems.length})</a>`;
-    card.appendChild(dl); out.appendChild(card);
+    card.appendChild(dl);
+    // --- Fläsk-räkning per avdelning (på begäran) ---
+    const fbtn=document.createElement("button"); fbtn.textContent="Visa fläsk-räkning per avdelning";
+    fbtn.style.cssText="margin-top:14px;width:100%;background:#132038;color:#fff;border:0;border-radius:10px;padding:12px;font-size:15px;font-weight:600;cursor:pointer";
+    const fbox=document.createElement("div"); fbox.style.marginTop="12px"; fbox.style.display="none";
+    fbtn.addEventListener("click",()=>{
+      if(fbox.style.display==="none"){
+        fbox.innerHTML="";
+        sections.forEach(sec=>{
+          const {rows,tot}=flaskPerWard(sec);
+          const h=document.createElement("div"); h.style.cssText="font-weight:700;margin:10px 0 4px";
+          h.textContent=sec.facility; fbox.appendChild(h);
+          let html='<table style="width:100%;border-collapse:collapse;font-size:15px"><tr style="background:#eee;font-weight:700"><td style=\'padding:5px 8px\'>Avdelning</td><td style=\'padding:5px 8px;text-align:right\'>Normalkost</td><td style=\'padding:5px 8px;text-align:right\'>Ej fläsk</td><td style=\'padding:5px 8px;text-align:right\'>Veg</td></tr>';
+          rows.forEach(r=>{ html+=`<tr style="border-bottom:1px solid #e3e6ec"><td style='padding:5px 8px'>${r.ward}</td><td style='padding:5px 8px;text-align:right'>${r.norm}</td><td style='padding:5px 8px;text-align:right'>${r.ejf}</td><td style='padding:5px 8px;text-align:right'>${r.veg}</td></tr>`; });
+          html+=`<tr style="font-weight:700;background:#f4f6fa"><td style='padding:5px 8px'>Totalt</td><td style='padding:5px 8px;text-align:right'>${tot.norm}</td><td style='padding:5px 8px;text-align:right'>${tot.ejf}</td><td style='padding:5px 8px;text-align:right'>${tot.veg}</td></tr></table>`;
+          const t=document.createElement("div"); t.innerHTML=html; fbox.appendChild(t);
+        });
+        const fl=document.createElement("a"); fl.textContent="⬇︎ Skriv ut / ladda ner (PDF)";
+        fl.href=URL.createObjectURL(buildFlaskPdf(sections)); fl.download="flask_rakning.pdf";
+        fl.style.cssText="display:inline-block;margin-top:12px;background:#132038;color:#fff;text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:600;font-size:15px";
+        fbox.appendChild(fl);
+        fbox.style.display="block"; fbtn.textContent="Dölj fläsk-räkning";
+      } else { fbox.style.display="none"; fbtn.textContent="Visa fläsk-räkning per avdelning"; }
+    });
+    card.appendChild(fbtn); card.appendChild(fbox);
+
+    // --- Portionering per avdelning ---
+    const pwrap=document.createElement("div"); pwrap.style.cssText="margin-top:16px;border-top:1px solid #e3e6ec;padding-top:14px";
+    pwrap.innerHTML=`<div style="font-weight:700;margin-bottom:8px">Portionering (väg/skopa)</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:14px">
+        <label>Lunch <input id="luA" type="number" step="any" style="width:70px;padding:6px;border:1px solid #d7dce4;border-radius:6px">
+        <select id="luU" style="padding:6px;border:1px solid #d7dce4;border-radius:6px"><option value="g">g</option><option value="dl">dl</option></select>/pers</label>
+        <label>Middag <input id="miA" type="number" step="any" style="width:70px;padding:6px;border:1px solid #d7dce4;border-radius:6px">
+        <select id="miU" style="padding:6px;border:1px solid #d7dce4;border-radius:6px"><option value="g">g</option><option value="dl">dl</option></select>/pers</label>
+        <label>Extra/avd <input id="exN" type="number" value="2" style="width:56px;padding:6px;border:1px solid #d7dce4;border-radius:6px"></label>
+        <label>Matsalen (lunch) <input id="msA" type="number" step="any" style="width:70px;padding:6px;border:1px solid #d7dce4;border-radius:6px"> <span style="color:#777">l/kg som lunch</span></label>
+      </div>
+      <div style="margin-top:8px;font-size:14px">Justeringar pax (flera går bra – separera med radbrytning, mellanslag eller komma, t.ex. <b>H23=27 H94+10 H95+10</b>):<br>
+        <textarea id="adjT" rows="3" placeholder="H23=27  H94+10  H95+10" style="width:100%;margin-top:4px;padding:6px;border:1px solid #d7dce4;border-radius:6px;font-family:monospace"></textarea></div>`;
+    const pbtn=document.createElement("button"); pbtn.textContent="⬇︎ Skriv ut portionering (PDF)";
+    pbtn.style.cssText="margin-top:10px;width:100%;background:#132038;color:#fff;border:0;border-radius:10px;padding:12px;font-size:15px;font-weight:600;cursor:pointer";
+    const pout=document.createElement("div"); pout.style.marginTop="8px";
+    try{ const sv=JSON.parse(localStorage.getItem("portion")||"{}");
+      if(sv.luA)pwrap.querySelector("#luA").value=sv.luA; if(sv.luU)pwrap.querySelector("#luU").value=sv.luU;
+      if(sv.miA)pwrap.querySelector("#miA").value=sv.miA; if(sv.miU)pwrap.querySelector("#miU").value=sv.miU;
+      if(sv.exN!=null&&sv.exN!=="")pwrap.querySelector("#exN").value=sv.exN; if(sv.adjT)pwrap.querySelector("#adjT").value=sv.adjT;
+      if(sv.msA)pwrap.querySelector("#msA").value=sv.msA;
+    }catch(e){}
+    pbtn.addEventListener("click",()=>{
+      const luA=parseFloat(pwrap.querySelector("#luA").value), luU=pwrap.querySelector("#luU").value;
+      const miA=parseFloat(pwrap.querySelector("#miA").value), miU=pwrap.querySelector("#miU").value;
+      const extra=parseInt(pwrap.querySelector("#exN").value)||0;
+      const matsalen=parseFloat(pwrap.querySelector("#msA").value)||0;
+      const adjT=pwrap.querySelector("#adjT").value;
+      try{ localStorage.setItem("portion", JSON.stringify({luA:pwrap.querySelector("#luA").value,luU,miA:pwrap.querySelector("#miA").value,miU,exN:pwrap.querySelector("#exN").value,msA:pwrap.querySelector("#msA").value,adjT})); }catch(e){}
+      const meals=[];
+      if(luA>0) meals.push({title:"LUNCH",amount:luA,unit:luU,matsalen});
+      if(miA>0) meals.push({title:"MIDDAG",amount:miA,unit:miU});
+      if(!meals.length){ pout.innerHTML='<div style="color:#c62828;font-size:14px">Skriv minst en mängd (Lunch eller Middag).</div>'; return; }
+      const datum=(sections.find(s=>s.datum)||{}).datum||"";
+      const pa=parseAdj(adjT);
+      const url=URL.createObjectURL(buildPortionPdf(sections, pa.map, meals, extra, datum));
+      pout.innerHTML=""; const a=document.createElement("a"); a.href=url; a.download="portionering.pdf"; a.textContent="⬇︎ Öppna / skriv ut portionering";
+      a.style.cssText="display:inline-block;background:#1f7a3d;color:#fff;text-decoration:none;padding:11px 16px;border-radius:8px;font-weight:600;font-size:15px"; pout.appendChild(a);
+      if(pa.applied.length){ const d=document.createElement("div"); d.style.cssText="color:#1f7a3d;font-size:13px;margin-top:8px"; d.textContent="Justeringar tillämpade: "+pa.applied.join(", "); pout.appendChild(d); }
+      if(pa.bad.length){ const d=document.createElement("div"); d.style.cssText="color:#c62828;font-size:13px;margin-top:4px"; d.textContent="⚠ Ej förstådda rader (ignorerade): "+pa.bad.join("  |  "); pout.appendChild(d); }
+    });
+    pwrap.appendChild(pbtn); pwrap.appendChild(pout); card.appendChild(pwrap);
+
+    out.appendChild(card);
   }catch(err){
     const e=document.createElement("div"); e.className="err"; e.textContent="Fel: "+(err&&err.message?err.message:err); out.appendChild(e);
   }
