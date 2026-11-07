@@ -60,7 +60,7 @@
     Regler: “Ej Fläsk”, “Ramadan” och “Ungdom” tas alltid bort. Nötter/Mandel/Laktos/Ej Blodmat tas bort endast när de står ensamma; annars behålls raden (Nötter/Mandel markeras för kontroll). Allergener och korta Annat-livsmedel får “-” framför; instruktioner (t.ex. Diabetes, Hjärtproblem) förblir text.<br>
     Säkerhet: rader raderas aldrig. Varje enhet visar <i>Angivet = Lästa</i>: stämmer det inte, kontrollera manuellt.
   </p>
-  <p style="text-align:center;color:#9aa3b0;font-size:12px;margin-top:20px">Powered by <b>Simone Frosali</b> · 2026 · Västervik Norra Köket · <span style="color:#c3cad6">v 2026-11-07</span></p>
+  <p style="text-align:center;color:#9aa3b0;font-size:12px;margin-top:20px">Powered by <b>Simone Frosali</b> · 2026 · Västervik Norra Köket · <span style="color:#c3cad6">v1.28 · 2026-11-07</span></p>
 </div>
 
 <script>
@@ -315,7 +315,7 @@ function buildPortionPdf(sections, adjMap, meals, extra, datum){
   doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.setTextColor(0);
   doc.text("Portionering per avdelning",15,14);
   doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(90);
-  doc.text(`${datum||""} · Port. = pax + ${extra} extra (fast "=" får inga extra) · * = justerad pax · v 2026-11-07`,15,19); doc.setTextColor(0);
+  doc.text(`${datum||""} · Port. = pax + ${extra} extra (fast "=" får inga extra) · * = justerad pax · v1.28 · 2026-11-07`,15,19); doc.setTextColor(0);
   const nM=meals.length;
   let rh=Math.min(5.2, 258/(nM*(rows.length+3)+(nM-1)*2)); rh=Math.max(rh,3.2);
   const fs=Math.min(11, Math.max(8, rh*2));
@@ -385,13 +385,13 @@ function buildLists(sections){
     doc.text("Matbeställningslista",105,15,{align:"center"});
     doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(90);
     doc.text(sec.facility+"  ·  rensad (borttaget: Ej Fläsk, Ramadan, Ungdom, Nötter, Mandel, Laktos, Ej Blodmat ensam)",105,20,{align:"center"});
-    const ok = sec.declared===sec.extracted;
+    const ok = sec.declared===sec.extracted && !sec.noavd;
     doc.setFillColor(ok?232:253, ok?245:236, ok?233:234);
     doc.setDrawColor(ok?67:198, ok?160:40, ok?71:40); doc.setLineWidth(0.4);
     doc.rect(10,24,190,14,"FD"); doc.setTextColor(20); doc.setFont("helvetica","bold");
     doc.setFontSize(10); doc.text(ok?"AVSTÄMNING OK":"AVVIKELSE — KONTROLLERA MANUELLT",13,29.5);
     doc.setFontSize(9);
-    doc.text(`Angivet totalt: ${sec.declared}    Lästa rader: ${sec.extracted}    Tömda: ${sec.emptied}    Med begäran: ${sec.remaining}    Att kontrollera: ${sec.review}`,13,34.5);
+    doc.text(`Angivet totalt: ${sec.declared}    Lästa rader: ${sec.extracted}    Tömda: ${sec.emptied}    Med begäran: ${sec.remaining}    Att kontrollera: ${sec.review}${sec.noavd?`    UTAN AVDELNING: ${sec.noavd}`:""}`,13,34.5);
     if(sec.datum){ doc.setFont("helvetica","bold"); doc.setFontSize(16); doc.setTextColor(20);
       doc.text(sec.datum, 200, 16, {align:"right"}); doc.setTextColor(0); }
     let y=42;
@@ -447,10 +447,13 @@ function buildLists(sections){
       }
     }
     doc.autoTable({startY:y, head:[["Inskrivningsnr","Avdelning","Specialkost"]],
-      body: sec.people.map(p=>[p.insk,p.avd, p.flag==="review" ? (p.text+"  ◀ KONTROLLERA") : p.text]),
+      body: sec.people.map(p=>[p.insk, (p.flag==="noavd"?"‹ SAKNAS":p.avd),
+        p.flag==="review" ? (p.text+"  ‹‹ KONTROLLERA") : (p.flag==="noavd" ? (p.text+"  ‹‹ AVD SAKNAS") : p.text)]),
       theme:"grid", styles:{fontSize:10, cellPadding:1.2}, headStyles:{fillColor:[238,238,238],textColor:20,fontSize:9.5},
       margin:{left:10,right:10}, columnStyles:{0:{cellWidth:33},1:{cellWidth:29},2:{cellWidth:122}},
-      didParseCell:d=>{ if(d.section==="body"){ const pp=sec.people[d.row.index]; if(pp&&pp.flag==="review") d.cell.styles.fillColor=[255,243,224]; } }
+      didParseCell:d=>{ if(d.section==="body"){ const pp=sec.people[d.row.index];
+        if(pp&&pp.flag==="review") d.cell.styles.fillColor=[255,243,224];
+        else if(pp&&pp.flag==="noavd"){ d.cell.styles.fillColor=[253,221,221]; d.cell.styles.textColor=[170,20,20]; d.cell.styles.fontStyle="bold"; } } }
     });
   });
   return doc.output("blob");
@@ -489,7 +492,7 @@ function buildLabels(items, dx, dy){
     const maxW = 42; let size=11, lines;
     while(size>=6){ doc.setFontSize(size); lines=doc.splitTextToSize(it.type||"", maxW);
       if(lines.length*(size*PT+0.7) <= labH-26) break; size-=0.5; }
-    if(it.flag==="review") doc.setTextColor(200,40,40); else doc.setTextColor(0);
+    if(it.flag==="review"||it.flag==="noavd") doc.setTextColor(200,40,40); else doc.setTextColor(0);
     doc.setFontSize(size); let ty=y+TOPPAD+size*PT;
     for(const ln of lines){ doc.text(ln, cx, ty, {align:"center"}); ty += size*PT+0.7; }
   });
@@ -523,11 +526,16 @@ go.addEventListener("click", async ()=>{
       const buf = await f.arrayBuffer();
       const {facility, declared, summary, people, datum} = await parsePdf(buf);
       const cleaned = people.map(p=>{ const c=cleanSpec(p.spec); return {insk:p.insk, avd:p.avd, text:c.text, flag:c.flag}; });
+      // SÄKERHETSKOLL: person MED specialkost men UTAN avdelning som dyker upp EFTER att avdelningar
+      // börjat markeras (kan annars tyst missas). Det inledande blocket utan avd längst upp lämnas som det är.
+      const firstAvd = cleaned.findIndex(p=>p.avd);
+      if(firstAvd>=0){ cleaned.forEach((p,i)=>{ if(i>firstAvd && !p.avd && p.text!=="" && p.flag!=="review") p.flag="noavd"; }); }
       const emptied = cleaned.filter(p=>p.text==="").length;
       const review  = cleaned.filter(p=>p.flag==="review").length;
+      const noavd   = cleaned.filter(p=>p.flag==="noavd").length;
       const extracted = cleaned.length;
       sections.push({facility:facility||f.name, declared, summary, people:cleaned, raw:people, datum,
-                     extracted, emptied, review, remaining:extracted-emptied});
+                     extracted, emptied, review, noavd, remaining:extracted-emptied});
       cleaned.filter(p=>p.text!=="").forEach(p=>labelItems.push(
         {ward:wardOf(p.avd), type:shortType(p.text), num:shortNum(p.insk), flag:p.flag}));
     }
@@ -536,10 +544,10 @@ go.addEventListener("click", async ()=>{
     const dy=parseFloat(document.getElementById("dy").value)||0;
     const labURL =URL.createObjectURL(buildLabels(labelItems, dx, dy));
     const card=document.createElement("div"); card.className="card";
-    sections.forEach(s=>{ const ok=s.declared===s.extracted; const d=document.createElement("div");
+    sections.forEach(s=>{ const ok=s.declared===s.extracted && !s.noavd; const d=document.createElement("div");
       d.className="rec "+(ok?"ok":"bad");
       d.innerHTML=`<b>${s.facility} — ${ok?"AVSTÄMNING OK ✓":"⚠ AVVIKELSE, kontrollera manuellt"}</b>
-        Angivet ${s.declared==null?"?":s.declared} · Lästa ${s.extracted} · Tömda ${s.emptied} · Med begäran ${s.remaining} · Att kontrollera ${s.review}`;
+        Angivet ${s.declared==null?"?":s.declared} · Lästa ${s.extracted} · Tömda ${s.emptied} · Med begäran ${s.remaining} · Att kontrollera ${s.review}${s.noavd?` · <b style="color:#c62828">Utan avdelning ${s.noavd}</b>`:""}`;
       card.appendChild(d); });
     const dl=document.createElement("div"); dl.className="dl";
     dl.innerHTML=`<a href="${listURL}" download="rensad_lista.pdf">⬇︎ Rensad lista</a>
