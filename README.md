@@ -1,3 +1,5 @@
+**🇬🇧 English** · [🇸🇪 Svenska](README.sv.md)
+
 # Matlistor
 
 **Automatic cleaning, labels and portioning of special diets — for the Kriminalvården kitchen.**
