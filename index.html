@@ -926,7 +926,8 @@ function buildLabels(items, dx, dy){
     for(let c=1;c<cols;c++){ const x=ml+c*labW+dx; doc.line(x,y0,x,y1); }   // endast inre vertikala
     for(let r=1;r<rows;r++){ const y=mt+r*labH+dy; doc.line(x0,y,x1,y); }   // endast inre horisontella
   }
-  items.forEach((it,idx)=>{
+  function drawSet(list){
+   list.forEach((it,idx)=>{
     const pos=idx%perPage;
     if(pos===0){ if(idx) doc.addPage(); grid(); }
     const col=pos%cols, row=Math.floor(pos/cols);
@@ -949,7 +950,11 @@ function buildLabels(items, dx, dy){
     if(it.flag==="review"||it.flag==="noavd") doc.setTextColor(200,40,40); else doc.setTextColor(0);
     doc.setFontSize(size); let ty=y+TOPPAD+size*PT;
     for(const ln of lines){ doc.text(ln, cx, ty, {align:"center"}); ty += size*PT+0.7; }
-  });
+   });
+  }
+  // Dubbla etiketter: först hela lunch-blocket, sedan hela middag-blocket (identiska), på nya ark.
+  drawSet(items);
+  if(items.length){ doc.addPage(); drawSet(items); }
   return doc.output("blob");
 }
 
@@ -1005,7 +1010,7 @@ go.addEventListener("click", async ()=>{
       card.appendChild(d); });
     const dl=document.createElement("div"); dl.className="dl";
     dl.innerHTML=`<a href="${listURL}" download="rensad_lista.pdf">⬇︎ Rensad lista</a>
-                  <a href="${labURL}" download="etiketter.pdf">⬇︎ Etiketter (${labelItems.length})</a>`;
+                  <a href="${labURL}" download="etiketter.pdf">⬇︎ Etiketter – lunch+middag (${labelItems.length}×2)</a>`;
     card.appendChild(dl);
     // --- Fläsk-räkning per avdelning (på begäran) ---
     const fbtn=document.createElement("button"); fbtn.textContent="Visa fläsk-räkning per avdelning";
